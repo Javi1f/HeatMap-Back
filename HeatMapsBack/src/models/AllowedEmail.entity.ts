@@ -7,10 +7,13 @@ export class AllowedEmail {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ unique: true, length: 150 })
+    @Column({ type: 'text' })
     email: string;
 
-    @Column({ length: 100, nullable: true })
+    @Column({ unique: true, length: 64 })
+    emailHash: string;
+
+    @Column({ type: 'text', nullable: true })
     addedBy: string;
 
     @CreateDateColumn()

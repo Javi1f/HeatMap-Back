@@ -8,13 +8,19 @@ export class Admin {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ unique: true, length: 50 })
+    @Column({ type: 'text' })
     username: string;
 
-    @Column({ unique: true, length: 150 })
+    @Column({ unique: true, length: 64 })
+    usernameHash: string;
+
+    @Column({ type: 'text' })
     email: string;
 
-    @Column()
+    @Column({ unique: true, length: 64 })
+    emailHash: string;
+
+    @Column({ type: 'text' })
     password: string;
 
     @Column({ default: false })

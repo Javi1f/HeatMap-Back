@@ -7,7 +7,9 @@
     "dev": "nodemon --watch src --ext ts --exec ts-node -r dotenv/config src/index.ts",
     "build": "tsc",
     "start": "node -r dotenv/config dist/index.js",
-    "typeorm": "typeorm-ts-node-commonjs"
+    "typeorm": "typeorm-ts-node-commonjs",
+    "reset-db": "ts-node -r dotenv/config src/scripts/reset-db.ts",
+    "seed": "ts-node -r dotenv/config src/scripts/seed.ts"
   },
   "keywords": [],
   "author": "",

@@ -1,19 +1,34 @@
 import { AppDataSource } from '../../config/database.config';
 import { AllowedEmail } from '../../models/AllowedEmail.entity';
+import { encryptField, decryptField, hashField } from '../../utils/db-crypto.util';
 
 const repo = () => AppDataSource.getRepository(AllowedEmail);
+
+function decryptRecord(record: AllowedEmail): AllowedEmail {
+    record.email = decryptField(record.email);
+    if (record.addedBy) record.addedBy = decryptField(record.addedBy);
+    return record;
+}
 
 class AllowedEmailsService {
 
     async getAll(): Promise<AllowedEmail[]> {
-        return repo().find({ order: { createdAt: 'DESC' } });
+        const records = await repo().find({ order: { createdAt: 'DESC' } });
+        return records.map(decryptRecord);
     }
 
     async add(email: string, addedBy: string): Promise<AllowedEmail> {
-        const exists = await repo().findOne({ where: { email } });
+        const emailHash = hashField(email);
+        const exists = await repo().findOne({ where: { emailHash } });
         if (exists) throw { statusCode: 400, message: 'El correo ya está en la lista' };
 
-        return repo().save(repo().create({ email, addedBy }));
+        const saved = await repo().save(repo().create({
+            email: encryptField(email),
+            emailHash,
+            addedBy: encryptField(addedBy)
+        }));
+
+        return decryptRecord(saved);
     }
 
     async remove(id: number): Promise<void> {
@@ -23,7 +38,8 @@ class AllowedEmailsService {
     }
 
     async isAllowed(email: string): Promise<boolean> {
-        const found = await repo().findOne({ where: { email } });
+        const emailHash = hashField(email);
+        const found = await repo().findOne({ where: { emailHash } });
         return !!found;
     }
 }
