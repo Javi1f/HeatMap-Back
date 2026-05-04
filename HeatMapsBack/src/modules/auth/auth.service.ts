@@ -99,7 +99,6 @@ class AuthService {
             throw { statusCode: 400, message: 'Código incorrecto', attemptsLeft };
         }
 
-        // Código correcto → crear el admin real
         const admin = adminRepo().create({
             username: pending.username,
             email: pending.email,

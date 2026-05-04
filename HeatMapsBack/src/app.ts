@@ -6,7 +6,6 @@ import allowedEmailsRoutes from './modules/allowed-emails/allowed-emails.routes'
 
 const app: Application = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 

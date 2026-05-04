@@ -11,6 +11,9 @@ yarn.lock
 .env.local
 .env.*.local
 
+#qodana
+qodana.yaml
+
 # Build output
 dist/
 build/

@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import authService from './auth.service';
-import logger from '../../utils/logger';
 
 class AuthController {
 
