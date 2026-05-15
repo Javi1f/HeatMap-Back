@@ -14,7 +14,6 @@ app.get('/ping', (req, res) => {
     res.json({ message: 'pong' });
 });
 
-// Cifrado E2E aplicado a todas las rutas API y Kafka
 app.use('/api', decryptRequest, encryptResponse);
 app.use('/kafka', decryptRequest, encryptResponse);
 

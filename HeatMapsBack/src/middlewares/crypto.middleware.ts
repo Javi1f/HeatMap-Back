@@ -31,7 +31,6 @@ function decryptPayload(data: string): unknown {
     return JSON.parse(plain);
 }
 
-// Descifra el body entrante: { data: "<base64>" } → req.body = objeto plano
 export function decryptRequest(req: Request, res: Response, next: NextFunction): void {
     if (!req.body || !req.body.data) {
         next();
@@ -45,7 +44,6 @@ export function decryptRequest(req: Request, res: Response, next: NextFunction):
     }
 }
 
-// Cifra toda respuesta: res.json(obj) → { data: "<base64>" }
 export function encryptResponse(req: Request, res: Response, next: NextFunction): void {
     const originalJson = res.json.bind(res);
     res.json = function (body: unknown) {

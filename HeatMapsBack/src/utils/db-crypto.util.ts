@@ -28,7 +28,6 @@ export function decryptField(encrypted: string): string {
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
-// HMAC determinístico para búsquedas (WHERE emailHash = ?)
 export function hashField(value: string): string {
     const key = getKey('DB_HMAC_KEY');
     return crypto.createHmac('sha256', key).update(value.toLowerCase().trim()).digest('hex');
