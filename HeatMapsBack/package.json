@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node -r dotenv/config src/index.ts",
     "build": "tsc",
+    "heroku-postbuild": "npm run build",
     "start": "node dist/index.js",
     "typeorm": "typeorm-ts-node-commonjs",
     "reset-db": "ts-node -r dotenv/config src/scripts/reset-db.ts",
