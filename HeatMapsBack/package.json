@@ -2,7 +2,10 @@
   "name": "heatmapsback",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node -r dotenv/config src/index.ts",
     "build": "tsc",
