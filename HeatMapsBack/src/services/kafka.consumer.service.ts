@@ -7,6 +7,8 @@ import logger from '../utils/logger';
 import { MESSAGES } from '../constants/messages';
 import dataProcessorService from './data-processor.service';
 
+const MAX_MESSAGE_AGE_SECONDS = parseInt(process.env.KAFKA_MAX_MESSAGE_AGE_SECONDS || '60', 10);
+
 class KafkaConsumerService {
     private kafka: Kafka | null = null;
     private consumer: Consumer | null = null;
@@ -32,9 +34,7 @@ class KafkaConsumerService {
         try {
             this.initKafka();
 
-            if (!this.kafka) {
-                throw new Error('Kafka no está inicializado');
-            }
+            if (!this.kafka) throw new Error('Kafka no está inicializado');
 
             this.consumer = this.kafka.consumer({ groupId: KAFKA_GROUP_ID });
 
@@ -63,12 +63,17 @@ class KafkaConsumerService {
 
             const data: SensorPayload = decrypt(message.value);
 
+            const messageAgeSeconds = Date.now() / 1000 - data.timestamp;
+            if (messageAgeSeconds > MAX_MESSAGE_AGE_SECONDS) {
+                logger.debug(`Mensaje histórico descartado (${Math.round(messageAgeSeconds)}s de antigüedad) - sensor: ${data.sensor_id}`);
+                return;
+            }
+
             const processedData: ProcessedSensorData = this.processData(data, message.value.length);
 
             logger.info(`${MESSAGES.KAFKA.DATA_RECEIVED}: Sensor ${processedData.sensor_id} | ${processedData.total_devices} dispositivos`);
 
             await dataProcessorService.processAndSave(processedData);
-
             emitSensorData(processedData);
 
             logger.debug(MESSAGES.KAFKA.DATA_SENT);
