@@ -38,8 +38,8 @@ describe('SensorPayloadCipher', () => {
     });
 
     it('encrypt usa nonces distintos en cada llamada', () => {
-        const a = cipher.encrypt(sample);
-        const b = cipher.encrypt(sample);
-        expect(Buffer.compare(a, b)).not.toBe(0);
+        const first = cipher.encrypt(sample);
+        const second = cipher.encrypt(sample);
+        expect(Buffer.compare(first, second)).not.toBe(0);
     });
 });

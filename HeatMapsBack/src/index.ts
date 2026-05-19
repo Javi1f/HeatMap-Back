@@ -11,6 +11,60 @@ import { KafkaConsumerService } from './modules/sensor/services/kafka-consumer.s
 import { MESSAGES } from './constants/messages';
 
 /**
+ * Cierre limpio de los recursos abiertos en `bootstrap`.
+ *
+ * No llama a `process.exit()`: en su lugar fija `process.exitCode` y deja
+ * que el loop drene de forma natural una vez cerrados los handles
+ * (Kafka consumer, Socket.IO, HTTP server, DataSource). Es el patrón
+ * recomendado por Node — un `process.exit()` abrupto puede matar callbacks
+ * en vuelo (por ejemplo, escrituras a logs externos).
+ */
+const shutdownAll = async (
+    httpServer: HttpServer,
+    db: DatabaseConfig,
+    consumer: KafkaConsumerService,
+    emitter: SocketEmitterService,
+    logger: LoggerService,
+    signal: string,
+): Promise<void> => {
+    logger.info(`Señal ${signal} recibida, cerrando...`);
+    try {
+        await consumer.stop();
+        await emitter.close();
+        await new Promise<void>((resolve, reject) =>
+            httpServer.close((err) => (err ? reject(err) : resolve())),
+        );
+        await db.destroy();
+        logger.info('Shutdown completo');
+        process.exitCode = 0;
+    } catch (err) {
+        logger.error('Error durante shutdown', err);
+        process.exitCode = 1;
+    }
+};
+
+/**
+ * Registra handlers para shutdown graceful en SIGINT y SIGTERM.
+ * Cierra en orden inverso al arranque: consumer → socket → http → db.
+ */
+const registerShutdownHooks = (
+    httpServer: HttpServer,
+    db: DatabaseConfig,
+    consumer: KafkaConsumerService,
+    emitter: SocketEmitterService,
+    logger: LoggerService,
+): void => {
+    const onSignal = (signal: NodeJS.Signals): void => {
+        shutdownAll(httpServer, db, consumer, emitter, logger, signal).catch((err) => {
+            logger.error('Fallo no manejado en shutdown', err);
+            process.exitCode = 1;
+        });
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
+};
+
+/**
  * Punto de entrada de la aplicación.
  *
  * Responsabilidades:
@@ -22,9 +76,9 @@ import { MESSAGES } from './constants/messages';
  *  6. Arrancar el consumidor de Kafka.
  *  7. Registrar shutdown limpio en SIGINT/SIGTERM.
  *
- * Si cualquier paso crítico falla, loguea el error y termina con código 1.
+ * Si cualquier paso crítico falla, loguea el error y marca `process.exitCode = 1`.
  */
-async function bootstrap(): Promise<void> {
+const bootstrap = async (): Promise<void> => {
     const logger = container.resolve(LoggerService);
     const cfg = container.resolve(AppConfig);
     const db = container.resolve(DatabaseConfig);
@@ -49,43 +103,11 @@ async function bootstrap(): Promise<void> {
     }
 
     registerShutdownHooks(httpServer, db, consumer, emitter, logger);
-}
-
-/**
- * Registra handlers para shutdown graceful en SIGINT y SIGTERM.
- * Cierra en orden inverso al arranque: consumer → socket → http → db.
- */
-function registerShutdownHooks(
-    httpServer: HttpServer,
-    db: DatabaseConfig,
-    consumer: KafkaConsumerService,
-    emitter: SocketEmitterService,
-    logger: LoggerService,
-): void {
-    const shutdown = async (signal: string): Promise<void> => {
-        logger.info(`Señal ${signal} recibida, cerrando...`);
-        try {
-            await consumer.stop();
-            await emitter.close();
-            await new Promise<void>((resolve, reject) =>
-                httpServer.close((err) => (err ? reject(err) : resolve())),
-            );
-            await db.destroy();
-            logger.info('Shutdown completo');
-            process.exit(0);
-        } catch (err) {
-            logger.error('Error durante shutdown', err);
-            process.exit(1);
-        }
-    };
-
-    process.on('SIGINT', () => void shutdown('SIGINT'));
-    process.on('SIGTERM', () => void shutdown('SIGTERM'));
-}
+};
 
 bootstrap().catch((err) => {
     // Logger puede no estar inicializado aún; usamos console como último recurso.
     // eslint-disable-next-line no-console
     console.error('Error fatal al inicializar la aplicación', err);
-    process.exit(1);
+    process.exitCode = 1;
 });

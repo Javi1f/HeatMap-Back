@@ -6,47 +6,57 @@ import { ApiErrorResponse } from '../types/api-response';
 import { LoggerService } from '../logger/logger.service';
 
 /**
- * Resuelve un `unknown` capturado a la forma `ApiErrorResponse`.
- *
- * Extraído del middleware principal para mantener su complejidad baja y
- * permitir testearlo de forma aislada en el futuro.
- *
- * @param err - Error original capturado por Express.
- * @returns Cuerpo de respuesta listo para enviar al cliente.
+ * Mapea un {@link AppError} (o subclase) a la forma de respuesta uniforme.
  */
-const toErrorResponse = (err: unknown): ApiErrorResponse => {
-    if (AppError.isAppError(err)) {
-        return {
-            success: false,
-            message: err.message,
-            code: err.code,
-            statusCode: err.statusCode,
-            ...(err.details ? { details: err.details } : {}),
-        };
-    }
-    if (err instanceof ZodError) {
-        return {
-            success: false,
-            message: 'Payload inválido',
-            code: ErrorCode.VALIDATION_FAILED,
-            statusCode: 400,
-            details: {
-                issues: err.issues.map((i) => ({
-                    path: i.path.join('.'),
-                    message: i.message,
-                })),
-            },
-        };
-    }
+const fromAppError = (err: AppError): ApiErrorResponse => ({
+    success: false,
+    message: err.message,
+    code: err.code,
+    statusCode: err.statusCode,
+    ...(err.details ? { details: err.details } : {}),
+});
+
+/**
+ * Mapea un {@link ZodError} a 400 con detalle de issues.
+ */
+const fromZodError = (err: ZodError): ApiErrorResponse => ({
+    success: false,
+    message: 'Payload inválido',
+    code: ErrorCode.VALIDATION_FAILED,
+    statusCode: 400,
+    details: {
+        issues: err.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+        })),
+    },
+});
+
+/**
+ * Mapea cualquier otro error desconocido a 500. En producción oculta el
+ * mensaje original para no filtrar detalles internos.
+ */
+const fromUnknown = (err: unknown): ApiErrorResponse => {
     const isProd = process.env.NODE_ENV === 'production';
+    const fallback = (err as Error)?.message ?? 'Error desconocido';
     return {
         success: false,
-        message: isProd
-            ? 'Error interno del servidor'
-            : (err as Error)?.message ?? 'Error desconocido',
+        message: isProd ? 'Error interno del servidor' : fallback,
         code: ErrorCode.INTERNAL,
         statusCode: 500,
     };
+};
+
+/**
+ * Resuelve un `unknown` capturado a la forma {@link ApiErrorResponse}.
+ *
+ * Implementa un dispatch por tipo con complejidad ciclomática mínima
+ * (cada rama delega en un helper).
+ */
+const toErrorResponse = (err: unknown): ApiErrorResponse => {
+    if (AppError.isAppError(err)) return fromAppError(err);
+    if (err instanceof ZodError) return fromZodError(err);
+    return fromUnknown(err);
 };
 
 /**
