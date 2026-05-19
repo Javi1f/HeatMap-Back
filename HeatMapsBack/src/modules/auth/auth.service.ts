@@ -237,16 +237,23 @@ export class AuthService {
      * toda la "forma" de las respuestas de auth quede en una sola capa, igual
      * que `login`, `register` y `verifyCode`. Si en el futuro se implementa
      * blacklist de tokens, la invalidación pasa por aquí también.
+     *
+     * @param admin - Payload del JWT del admin que cierra sesión. Se usa para
+     *   dejar trazabilidad en el log de auditoría.
      */
-    logout(): { message: string } {
+    logout(admin: JwtPayload): { message: string } {
+        this.logger.info(`Logout del admin id=${admin.id}`);
         return { message: 'Sesión cerrada exitosamente' };
     }
 
     /**
      * Cuerpo de respuesta para `GET /api/auth/session`. Devuelve el payload
      * del admin autenticado con un flag explícito de validez.
+     *
+     * @param admin - Payload del JWT verificado por el middleware.
      */
     session(admin: JwtPayload): { admin: JwtPayload; isValid: true } {
+        this.logger.debug(`Consulta de sesión admin id=${admin.id}`);
         return { admin, isValid: true };
     }
 }

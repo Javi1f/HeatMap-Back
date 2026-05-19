@@ -69,8 +69,9 @@ export class AuthController {
      * Si en el futuro se implementa blacklist de tokens, se invocaría dentro
      * de `authService.logout()`.
      */
-    logout = (_req: Request, res: Response): void => {
-        res.status(200).json(this.authService.logout());
+    logout = (req: Request, res: Response): void => {
+        if (!req.admin) throw new UnauthorizedError();
+        res.status(200).json(this.authService.logout(req.admin));
     };
 
     /**
