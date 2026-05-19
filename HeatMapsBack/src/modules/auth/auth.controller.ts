@@ -66,10 +66,11 @@ export class AuthController {
     /**
      * `POST /api/auth/logout` — endpoint convencional sin estado server-side.
      * JWT es stateless: la sesión se "cierra" descartando el token en el cliente.
-     * Si en el futuro se implementa blacklist de tokens, se invocaría aquí.
+     * Si en el futuro se implementa blacklist de tokens, se invocaría dentro
+     * de `authService.logout()`.
      */
     logout = (_req: Request, res: Response): void => {
-        res.status(200).json({ message: 'Sesión cerrada exitosamente' });
+        res.status(200).json(this.authService.logout());
     };
 
     /**
@@ -79,6 +80,6 @@ export class AuthController {
      */
     session = (req: Request, res: Response): void => {
         if (!req.admin) throw new UnauthorizedError();
-        res.status(200).json({ admin: req.admin, isValid: true });
+        res.status(200).json(this.authService.session(req.admin));
     };
 }

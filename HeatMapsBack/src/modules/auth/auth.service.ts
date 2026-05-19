@@ -229,4 +229,24 @@ export class AuthService {
     verifyToken(token: string): JwtPayload {
         return this.jwt.verify(token);
     }
+
+    /**
+     * Cuerpo de respuesta para `POST /api/auth/logout`.
+     *
+     * El método vive en el servicio (en lugar de en el controller) para que
+     * toda la "forma" de las respuestas de auth quede en una sola capa, igual
+     * que `login`, `register` y `verifyCode`. Si en el futuro se implementa
+     * blacklist de tokens, la invalidación pasa por aquí también.
+     */
+    logout(): { message: string } {
+        return { message: 'Sesión cerrada exitosamente' };
+    }
+
+    /**
+     * Cuerpo de respuesta para `GET /api/auth/session`. Devuelve el payload
+     * del admin autenticado con un flag explícito de validez.
+     */
+    session(admin: JwtPayload): { admin: JwtPayload; isValid: true } {
+        return { admin, isValid: true };
+    }
 }
