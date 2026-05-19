@@ -1,30 +1,47 @@
-const getEnvVar = (key: string, defaultValue?: string): string => {
-    const value = process.env[key] || defaultValue;
-    if (!value) {
-        throw new Error(`Variable de entorno ${key} no está definida`);
+import { singleton } from 'tsyringe';
+import { EnvService } from '../common/env/env.service';
+
+/**
+ * Configuración de conexión a Kafka.
+ *
+ * Solo expone parámetros de **transporte** (brokers, topic, SSL, group id).
+ * Las claves AES de cifrado de payloads se gestionan en `CryptoConfig`.
+ */
+@singleton()
+export class KafkaConfig {
+    public readonly brokers: string[];
+    public readonly topic: string;
+    public readonly groupId: string;
+    public readonly maxMessageAgeSeconds: number;
+    private readonly _ca: Buffer;
+    private readonly _cert: Buffer;
+    private readonly _key: Buffer;
+
+    constructor(env: EnvService) {
+        this.brokers = env.get('KAFKA_BOOTSTRAP_SERVERS').split(',').map((s) => s.trim());
+        this.topic = env.get('KAFKA_TOPIC').trim();
+        this.groupId = env.get('KAFKA_GROUP_ID').trim();
+        this.maxMessageAgeSeconds = env.get('KAFKA_MAX_MESSAGE_AGE_SECONDS');
+
+        this._ca = Buffer.from(env.get('KAFKA_SSL_CA'), 'base64');
+        this._cert = Buffer.from(env.get('KAFKA_SSL_CERT'), 'base64');
+        this._key = Buffer.from(env.get('KAFKA_SSL_KEY'), 'base64');
     }
-    return value.trim();
-};
 
-export const BOOTSTRAP_SERVERS = getEnvVar('KAFKA_BOOTSTRAP_SERVERS').split(',');
-export const KAFKA_TOPIC = getEnvVar('KAFKA_TOPIC');
-export const KAFKA_GROUP_ID = getEnvVar('KAFKA_GROUP_ID');
-
-export function getSSLConfig() {
-    const ca   = Buffer.from(getEnvVar('KAFKA_SSL_CA'),   'base64');
-    const cert = Buffer.from(getEnvVar('KAFKA_SSL_CERT'), 'base64');
-    const key  = Buffer.from(getEnvVar('KAFKA_SSL_KEY'),  'base64');
-
-    return {
-        ssl: {
+    /**
+     * Configuración SSL en el formato esperado por `kafkajs`.
+     */
+    get ssl(): {
+        rejectUnauthorized: boolean;
+        ca: Buffer[];
+        cert: Buffer;
+        key: Buffer;
+    } {
+        return {
             rejectUnauthorized: true,
-            ca:   [ca],
-            cert: cert,
-            key:  key
-        }
-    };
+            ca: [this._ca],
+            cert: this._cert,
+            key: this._key,
+        };
+    }
 }
-
-export const AES_KEY_1 = Buffer.from(getEnvVar('AES_KEY_1'), 'hex');
-export const AES_KEY_2 = Buffer.from(getEnvVar('AES_KEY_2'), 'hex');
-export const NONCE_SIZE = 8;
