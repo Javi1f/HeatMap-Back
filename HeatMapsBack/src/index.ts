@@ -54,6 +54,15 @@ const registerShutdownHooks = (
     emitter: SocketEmitterService,
     logger: LoggerService,
 ): void => {
+    /**
+     * Handler común para SIGINT y SIGTERM.
+     *
+     * Lanza el cierre asíncrono y captura cualquier excepción no manejada
+     * para garantizar que `process.exitCode` quede definido y el proceso
+     * termine con un código coherente.
+     *
+     * @param signal - Señal POSIX recibida (`SIGINT` o `SIGTERM`).
+     */
     const onSignal = (signal: NodeJS.Signals): void => {
         shutdownAll(httpServer, db, consumer, emitter, logger, signal).catch((err) => {
             logger.error('Fallo no manejado en shutdown', err);

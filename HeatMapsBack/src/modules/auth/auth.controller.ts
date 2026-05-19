@@ -25,33 +25,58 @@ import { UnauthorizedError } from '../../common/errors';
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
+    /**
+     * `POST /api/auth/login` — autentica al admin con username/email + password.
+     * Devuelve `{ admin, token }` con 200.
+     */
     login = async (req: Request, res: Response): Promise<void> => {
         const result = await this.authService.login(req.body as LoginDto);
         res.status(200).json(result);
     };
 
+    /**
+     * `POST /api/auth/register` — inicia el flujo de registro: crea un
+     * pending y envía el código por correo. Devuelve 201 con
+     * `{ message, verificationRequired: true }`.
+     */
     register = async (req: Request, res: Response): Promise<void> => {
         const result = await this.authService.register(req.body as RegisterDto);
         res.status(201).json(result);
     };
 
+    /**
+     * `POST /api/auth/verify-code` — valida el código y, si es correcto,
+     * promueve el pending a admin definitivo. Devuelve `{ admin, token }`.
+     */
     verifyCode = async (req: Request, res: Response): Promise<void> => {
         const result = await this.authService.verifyCode(req.body as VerifyCodeDto);
         res.status(200).json(result);
     };
 
+    /**
+     * `POST /api/auth/cancel-verification` — cancela un pending de registro.
+     * Idempotente: responde 200 incluso si no había pending.
+     */
     cancelVerification = async (req: Request, res: Response): Promise<void> => {
         const { email } = req.body as CancelVerificationDto;
         await this.authService.cancelVerification(email);
         res.status(200).json({ message: 'Verificación cancelada' });
     };
 
+    /**
+     * `POST /api/auth/logout` — endpoint convencional sin estado server-side.
+     * JWT es stateless: la sesión se "cierra" descartando el token en el cliente.
+     * Si en el futuro se implementa blacklist de tokens, se invocaría aquí.
+     */
     logout = (_req: Request, res: Response): void => {
-        // JWT stateless: la sesión se "cierra" descartando el token en el cliente.
-        // Si se implementa blacklist de tokens, llamar aquí al servicio.
         res.status(200).json({ message: 'Sesión cerrada exitosamente' });
     };
 
+    /**
+     * `GET /api/auth/session` — devuelve el payload del admin autenticado
+     * (poblado por `authMiddleware`). Sirve al frontend para revalidar
+     * sesión al recargar la app.
+     */
     session = (req: Request, res: Response): void => {
         if (!req.admin) throw new UnauthorizedError();
         res.status(200).json({ admin: req.admin, isValid: true });

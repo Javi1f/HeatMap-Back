@@ -35,11 +35,12 @@ export class DataProcessorService {
      *
      * @param data - Datos del sensor listos para procesar.
      */
-    async processAndSave(data: ProcessedSensorData): Promise<void> {
+    processAndSave(data: ProcessedSensorData): Promise<void> {
         // TODO(triangulation): implementar algoritmo de triangulación.
         // TODO(persistence): guardar lectura cruda en BD.
         this.logger.debug(
             `processAndSave sensor=${data.sensor_id} devices=${data.total_devices}`,
         );
+        return Promise.resolve();
     }
 }

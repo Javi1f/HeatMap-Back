@@ -21,10 +21,10 @@ export interface IAdminRepository {
 }
 
 /**
- * Implementación TypeORM del repositorio.
+ * Implementación TypeORM del repositorio de administradores.
  *
  * Encapsula las queries y aisla al servicio de los detalles del ORM.
- * Si se quisiera cambiar a Prisma o a raw SQL, solo cambia este archivo.
+ * Si se quisiera cambiar a Prisma o a SQL crudo, solo cambia este archivo.
  */
 @injectable()
 export class AdminRepository implements IAdminRepository {
@@ -34,21 +34,38 @@ export class AdminRepository implements IAdminRepository {
         this.repo = db.dataSource.getRepository(Admin);
     }
 
+    /**
+     * Busca un admin cuyo `emailHash` o `usernameHash` coincide con el hash
+     * dado. Útil para el login, donde el usuario puede introducir indistintamente
+     * su email o su username.
+     */
     findByUsernameOrEmailHash(hash: string): Promise<Admin | null> {
         return this.repo.findOne({
             where: [{ emailHash: hash }, { usernameHash: hash }],
         });
     }
 
+    /**
+     * Busca un admin por el hash exacto de su email.
+     */
     findByEmailHash(emailHash: string): Promise<Admin | null> {
         return this.repo.findOne({ where: { emailHash } });
     }
 
+    /**
+     * Busca un admin por el hash exacto de su username.
+     */
     findByUsernameHash(usernameHash: string): Promise<Admin | null> {
         return this.repo.findOne({ where: { usernameHash } });
     }
 
-    async create(data: Partial<Admin>): Promise<Admin> {
+    /**
+     * Crea y persiste un nuevo administrador.
+     *
+     * @param data - Campos del admin (username/email/password ya cifrados/hasheados).
+     * @returns La entidad persistida con sus columnas autogeneradas (id, fechas).
+     */
+    create(data: Partial<Admin>): Promise<Admin> {
         return this.repo.save(this.repo.create(data));
     }
 }

@@ -196,7 +196,7 @@ export class AuthService {
     /**
      * Crea el Admin definitivo a partir del PendingRegistration verificado.
      */
-    private async promoteToAdmin(pending: PendingRegistration, emailHash: string): Promise<Admin> {
+    private promoteToAdmin(pending: PendingRegistration, emailHash: string): Promise<Admin> {
         const username = this.cipher.decrypt(pending.username);
         const email = this.cipher.decrypt(pending.email);
         const usernameHash = this.cipher.hash(username);
