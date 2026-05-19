@@ -1,42 +1,34 @@
 import { Request, Response } from 'express';
-import allowedEmailsService from './allowed-emails.service';
+import { injectable } from 'tsyringe';
+import { AllowedEmailsService } from './allowed-emails.service';
+import { AddAllowedEmailDto, AllowedEmailIdParam } from './dto/add-email.dto';
+import { UnauthorizedError } from '../../common/errors';
 
-class AllowedEmailsController {
+/**
+ * Controlador HTTP del módulo de correos permitidos.
+ *
+ * Sigue las mismas reglas que `AuthController`: solo desempaqueta `req`,
+ * delega al service y formatea la respuesta.
+ */
+@injectable()
+export class AllowedEmailsController {
+    constructor(private readonly service: AllowedEmailsService) {}
 
-    async getAll(req: Request, res: Response): Promise<void> {
-        try {
-            const emails = await allowedEmailsService.getAll();
-            res.status(200).json({ success: true, data: emails });
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({ message: err.message, statusCode: err.statusCode || 500 });
-        }
-    }
+    getAll = async (_req: Request, res: Response): Promise<void> => {
+        const emails = await this.service.getAll();
+        res.status(200).json({ success: true, data: emails });
+    };
 
-    async add(req: Request, res: Response): Promise<void> {
-        try {
-            const admin = (req as any).admin;
-            const { email } = req.body;
+    add = async (req: Request, res: Response): Promise<void> => {
+        if (!req.admin) throw new UnauthorizedError();
+        const { email } = req.body as AddAllowedEmailDto;
+        const result = await this.service.add(email, req.admin.username);
+        res.status(201).json({ success: true, data: result });
+    };
 
-            if (!email) {
-                res.status(400).json({ message: 'El email es requerido', statusCode: 400 });
-                return;
-            }
-
-            const result = await allowedEmailsService.add(email, admin.username);
-            res.status(201).json({ success: true, data: result });
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({ message: err.message, statusCode: err.statusCode || 500 });
-        }
-    }
-
-    async remove(req: Request, res: Response): Promise<void> {
-        try {
-            await allowedEmailsService.remove(parseInt(req.params['id'] as string, 10));
-            res.status(200).json({ success: true, message: 'Correo eliminado de la lista' });
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({ message: err.message, statusCode: err.statusCode || 500 });
-        }
-    }
+    remove = async (req: Request, res: Response): Promise<void> => {
+        const { id } = req.params as unknown as AllowedEmailIdParam;
+        await this.service.remove(id);
+        res.status(200).json({ success: true, message: 'Correo eliminado de la lista' });
+    };
 }
-
-export default new AllowedEmailsController();

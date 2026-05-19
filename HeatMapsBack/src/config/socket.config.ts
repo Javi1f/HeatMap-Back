@@ -1,43 +1,24 @@
-import { Server as HTTPServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
-import logger from '../utils/logger';
-import { MESSAGES } from '../constants/messages';
+import { singleton } from 'tsyringe';
+import { AppConfig } from './app.config';
 
-let io: SocketIOServer | null = null;
+/**
+ * Opciones de creación del servidor Socket.IO.
+ *
+ * Esta clase NO crea el servidor (eso lo hace `SocketServerProvider` en la
+ * capa de infraestructura del módulo `sensor`), solo proporciona los
+ * parámetros tipados.
+ */
+@singleton()
+export class SocketConfig {
+    constructor(private readonly appConfig: AppConfig) {}
 
-export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
-    const corsOrigin = process.env.CORS_ORIGIN || '*';
+    /** Origen permitido para handshake CORS. */
+    get corsOrigin(): string {
+        return this.appConfig.corsOrigin;
+    }
 
-    io = new SocketIOServer(httpServer, {
-        cors: {
-            origin: corsOrigin,
-            methods: ['GET', 'POST']
-        }
-    });
-
-    io.on('connection', (socket) => {
-        logger.info(`${MESSAGES.WEBSOCKET.CLIENT_CONNECTED}: ${socket.id}`);
-
-        socket.on('disconnect', () => {
-            logger.info(`${MESSAGES.WEBSOCKET.CLIENT_DISCONNECTED}: ${socket.id}`);
-        });
-
-        socket.emit('connected', {
-            message: MESSAGES.WEBSOCKET.WELCOME,
-            timestamp: new Date().toISOString()
-        });
-    });
-
-    return io;
-}
-
-export function getSocketIO(): SocketIOServer {
-    if (!io) throw new Error('Socket.IO no ha sido inicializado');
-    return io;
-}
-
-export function emitSensorData(data: any): void {
-    if (io) {
-        io.emit('sensor-data', data);
+    /** Métodos HTTP permitidos en el handshake de Socket.IO. */
+    get corsMethods(): string[] {
+        return ['GET', 'POST'];
     }
 }

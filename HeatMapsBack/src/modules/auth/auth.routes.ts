@@ -1,14 +1,36 @@
 import { Router } from 'express';
-import authController from './auth.controller';
+import { container } from 'tsyringe';
+import { AuthController } from './auth.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
+import { validate } from '../../common/middlewares/validate.middleware';
+import { asyncHandler } from '../../common/middlewares/async-handler';
+import { loginSchema } from './dto/login.dto';
+import { registerSchema } from './dto/register.dto';
+import { verifyCodeSchema } from './dto/verify-code.dto';
+import { cancelVerificationSchema } from './dto/cancel-verification.dto';
 
-const router = Router();
+/**
+ * Construye el router del módulo de autenticación.
+ *
+ * Cada ruta declara explícitamente:
+ *  - El esquema de validación de su body (Zod).
+ *  - Si requiere autenticación.
+ *  - El handler envuelto en `asyncHandler` para propagar errores.
+ */
+export function buildAuthRouter(): Router {
+    const router = Router();
+    const ctrl = container.resolve(AuthController);
 
-router.post('/login', (req, res) => authController.login(req, res));
-router.post('/register', (req, res) => authController.register(req, res));
-router.post('/verify-code', (req, res) => authController.verifyCode(req, res));
-router.post('/logout', authMiddleware, (req, res) => authController.logout(req, res));
-router.get('/session', authMiddleware, (req, res) => authController.session(req, res));
-router.post('/cancel-verification', (req, res) => authController.cancelVerification(req, res));
+    router.post('/login', validate(loginSchema), asyncHandler(ctrl.login));
+    router.post('/register', validate(registerSchema), asyncHandler(ctrl.register));
+    router.post('/verify-code', validate(verifyCodeSchema), asyncHandler(ctrl.verifyCode));
+    router.post(
+        '/cancel-verification',
+        validate(cancelVerificationSchema),
+        asyncHandler(ctrl.cancelVerification),
+    );
+    router.post('/logout', authMiddleware, ctrl.logout);
+    router.get('/session', authMiddleware, ctrl.session);
 
-export default router;
+    return router;
+}

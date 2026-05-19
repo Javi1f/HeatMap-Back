@@ -1,56 +1,59 @@
 import { Request, Response } from 'express';
-import authService from './auth.service';
+import { injectable } from 'tsyringe';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { VerifyCodeDto } from './dto/verify-code.dto';
+import { CancelVerificationDto } from './dto/cancel-verification.dto';
+import { UnauthorizedError } from '../../common/errors';
 
-class AuthController {
+/**
+ * Controlador HTTP del módulo de autenticación.
+ *
+ * Reglas que respeta:
+ *  - NO contiene lógica de negocio: solo desempaqueta `req`, llama al
+ *    `AuthService` y envía la respuesta.
+ *  - NO captura errores: los deja propagar al `errorHandler` central
+ *    (los handlers se montan con `asyncHandler` en las rutas).
+ *  - NO conoce nada de cifrado, ORM, JWT, etc.
+ *
+ * El body de las peticiones ya está validado y tipado por el middleware
+ * `validate(...)` antes de llegar aquí — por eso podemos hacer cast a DTO
+ * con seguridad.
+ */
+@injectable()
+export class AuthController {
+    constructor(private readonly authService: AuthService) {}
 
-    async login(req: Request, res: Response): Promise<void> {
-        try {
-            const result = await authService.login(req.body);
-            res.status(200).json(result);
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({ message: err.message, statusCode: err.statusCode || 500 });
-        }
-    }
+    login = async (req: Request, res: Response): Promise<void> => {
+        const result = await this.authService.login(req.body as LoginDto);
+        res.status(200).json(result);
+    };
 
-    async register(req: Request, res: Response): Promise<void> {
-        try {
-            const result = await authService.register(req.body);
-            res.status(201).json(result);
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({ message: err.message, statusCode: err.statusCode || 500 });
-        }
-    }
+    register = async (req: Request, res: Response): Promise<void> => {
+        const result = await this.authService.register(req.body as RegisterDto);
+        res.status(201).json(result);
+    };
 
-    async verifyCode(req: Request, res: Response): Promise<void> {
-        try {
-            const result = await authService.verifyCode(req.body);
-            res.status(200).json(result);
-        } catch (err: any) {
-            res.status(err.statusCode || 500).json({
-                message: err.message,
-                attemptsLeft: err.attemptsLeft,
-                statusCode: err.statusCode || 500
-            });
-        }
-    }
+    verifyCode = async (req: Request, res: Response): Promise<void> => {
+        const result = await this.authService.verifyCode(req.body as VerifyCodeDto);
+        res.status(200).json(result);
+    };
 
-    async cancelVerification(req: Request, res: Response): Promise<void> {
-        try {
-            await authService.cancelVerification(req.body.email);
-            res.status(200).json({ message: 'Verificación cancelada' });
-        } catch (err: any) {
-            res.status(500).json({ message: err.message, statusCode: 500 });
-        }
-    }
+    cancelVerification = async (req: Request, res: Response): Promise<void> => {
+        const { email } = req.body as CancelVerificationDto;
+        await this.authService.cancelVerification(email);
+        res.status(200).json({ message: 'Verificación cancelada' });
+    };
 
-    logout(req: Request, res: Response): void {
+    logout = (_req: Request, res: Response): void => {
+        // JWT stateless: la sesión se "cierra" descartando el token en el cliente.
+        // Si se implementa blacklist de tokens, llamar aquí al servicio.
         res.status(200).json({ message: 'Sesión cerrada exitosamente' });
-    }
+    };
 
-    session(req: Request, res: Response): void {
-        const admin = (req as any).admin;
-        res.status(200).json({ admin, isValid: true });
-    }
+    session = (req: Request, res: Response): void => {
+        if (!req.admin) throw new UnauthorizedError();
+        res.status(200).json({ admin: req.admin, isValid: true });
+    };
 }
-
-export default new AuthController();

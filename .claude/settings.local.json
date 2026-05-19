@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"C:/Users/deads_ydg60se/Downloads/envio a jurados/\")",
+      "Bash(npm install *)"
+    ]
+  }
+}
