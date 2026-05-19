@@ -26,17 +26,17 @@ export type RequestPart = 'body' | 'query' | 'params';
  *   // Dentro del controller, req.body ya está tipado y validado:
  *   const { username, password } = req.body as LoginDto;
  */
-export function validate<S extends ZodTypeAny>(
+export const validate = <S extends ZodTypeAny>(
     schema: S,
     part: RequestPart = 'body',
-): RequestHandler {
+): RequestHandler => {
     return (req: Request, _res: Response, next: NextFunction): void => {
         const parsed = schema.parse(req[part]);
         // Mutamos la parte correspondiente para que el controller la consuma ya validada.
         (req as unknown as Record<RequestPart, unknown>)[part] = parsed;
         next();
     };
-}
+};
 
 /**
  * Helper de inferencia: dado un esquema Zod, obtén el tipo TS del DTO.

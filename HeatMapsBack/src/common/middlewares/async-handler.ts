@@ -11,10 +11,10 @@ import { NextFunction, Request, RequestHandler, Response } from 'express';
  * @example
  *   router.post('/login', asyncHandler(authController.login));
  */
-export function asyncHandler(
+export const asyncHandler = (
     handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
-): RequestHandler {
+): RequestHandler => {
     return (req, res, next) => {
         Promise.resolve(handler(req, res, next)).catch(next);
     };
-}
+};

@@ -26,7 +26,7 @@ import { buildSensorRouter } from './modules/sensor/sensor.routes';
  * recursos externos (DB, Kafka). Solo retorna la `Application` lista para
  * ser pasada a `http.createServer(...)`.
  */
-export function createApp(): Application {
+export const createApp = (): Application => {
     const app: Application = express();
     const cfg = container.resolve(AppConfig);
 
@@ -51,4 +51,4 @@ export function createApp(): Application {
     app.use(errorHandler);
 
     return app;
-}
+};

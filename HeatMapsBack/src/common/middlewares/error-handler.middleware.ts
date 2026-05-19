@@ -6,6 +6,50 @@ import { ApiErrorResponse } from '../types/api-response';
 import { LoggerService } from '../logger/logger.service';
 
 /**
+ * Resuelve un `unknown` capturado a la forma `ApiErrorResponse`.
+ *
+ * Extraído del middleware principal para mantener su complejidad baja y
+ * permitir testearlo de forma aislada en el futuro.
+ *
+ * @param err - Error original capturado por Express.
+ * @returns Cuerpo de respuesta listo para enviar al cliente.
+ */
+const toErrorResponse = (err: unknown): ApiErrorResponse => {
+    if (AppError.isAppError(err)) {
+        return {
+            success: false,
+            message: err.message,
+            code: err.code,
+            statusCode: err.statusCode,
+            ...(err.details ? { details: err.details } : {}),
+        };
+    }
+    if (err instanceof ZodError) {
+        return {
+            success: false,
+            message: 'Payload inválido',
+            code: ErrorCode.VALIDATION_FAILED,
+            statusCode: 400,
+            details: {
+                issues: err.issues.map((i) => ({
+                    path: i.path.join('.'),
+                    message: i.message,
+                })),
+            },
+        };
+    }
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+        success: false,
+        message: isProd
+            ? 'Error interno del servidor'
+            : (err as Error)?.message ?? 'Error desconocido',
+        code: ErrorCode.INTERNAL,
+        statusCode: 500,
+    };
+};
+
+/**
  * Middleware central de manejo de errores.
  *
  * Atrapa cualquier error que llegue al pipeline de Express y lo transforma
@@ -21,60 +65,31 @@ import { LoggerService } from '../logger/logger.service';
  * IMPORTANTE: Express identifica el error handler por su firma de 4 parámetros.
  * Aunque `_next` no se use, debe declararse.
  */
-export function errorHandler(
+export const errorHandler = (
     err: unknown,
     req: Request,
     res: Response,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _next: NextFunction,
-): void {
+): void => {
     const logger = container.resolve(LoggerService);
     const requestId = req.requestId ?? 'no-req-id';
+    const body = toErrorResponse(err);
 
-    let body: ApiErrorResponse;
-
-    if (AppError.isAppError(err)) {
-        body = {
-            success: false,
-            message: err.message,
-            code: err.code,
-            statusCode: err.statusCode,
-            ...(err.details ? { details: err.details } : {}),
-        };
-        logger.warn(`[${requestId}] ${err.code} ${err.statusCode}: ${err.message}`);
-    } else if (err instanceof ZodError) {
-        body = {
-            success: false,
-            message: 'Payload inválido',
-            code: ErrorCode.VALIDATION_FAILED,
-            statusCode: 400,
-            details: {
-                issues: err.issues.map((i) => ({
-                    path: i.path.join('.'),
-                    message: i.message,
-                })),
-            },
-        };
-        logger.warn(`[${requestId}] VALIDATION_FAILED 400`);
+    if (body.statusCode >= 500) {
+        logger.error(`[${requestId}] ${body.code} ${body.statusCode}`, err);
     } else {
-        const isProd = process.env.NODE_ENV === 'production';
-        body = {
-            success: false,
-            message: isProd ? 'Error interno del servidor' : (err as Error)?.message ?? 'Error desconocido',
-            code: ErrorCode.INTERNAL,
-            statusCode: 500,
-        };
-        logger.error(`[${requestId}] INTERNAL 500`, err);
+        logger.warn(`[${requestId}] ${body.code} ${body.statusCode}: ${body.message}`);
     }
 
     res.status(body.statusCode).json(body);
-}
+};
 
 /**
  * Middleware para rutas no encontradas (404). Se monta DESPUÉS de todas
  * las rutas y ANTES del error handler.
  */
-export function notFoundHandler(req: Request, res: Response): void {
+export const notFoundHandler = (req: Request, res: Response): void => {
     const body: ApiErrorResponse = {
         success: false,
         message: `Ruta no encontrada: ${req.method} ${req.originalUrl}`,
@@ -82,4 +97,4 @@ export function notFoundHandler(req: Request, res: Response): void {
         statusCode: 404,
     };
     res.status(404).json(body);
-}
+};

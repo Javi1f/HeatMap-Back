@@ -14,7 +14,11 @@ import { ValidationError } from '../common/errors';
  * Si el payload está mal cifrado, lanza un {@link ValidationError} para
  * que el `errorHandler` central responda 400.
  */
-export function decryptRequest(req: Request, _res: Response, next: NextFunction): void {
+export const decryptRequest = (
+    req: Request,
+    _res: Response,
+    next: NextFunction,
+): void => {
     if (!req.body || !req.body.data) {
         next();
         return;
@@ -26,7 +30,7 @@ export function decryptRequest(req: Request, _res: Response, next: NextFunction)
     } catch {
         next(new ValidationError('Payload cifrado inválido o clave incorrecta'));
     }
-}
+};
 
 /**
  * Middleware que **cifra** el body de la respuesta antes de enviarla.
@@ -35,11 +39,15 @@ export function decryptRequest(req: Request, _res: Response, next: NextFunction)
  * La intercepción se hace una sola vez por petición y respeta el tipo de
  * retorno original.
  */
-export function encryptResponse(_req: Request, res: Response, next: NextFunction): void {
+export const encryptResponse = (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+): void => {
     const cipher = container.resolve(ApiPayloadCipher);
     const originalJson = res.json.bind(res);
     res.json = function (body: unknown) {
         return originalJson({ data: cipher.encrypt(body) });
     };
     next();
-}
+};

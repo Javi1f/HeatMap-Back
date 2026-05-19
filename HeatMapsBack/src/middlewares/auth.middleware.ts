@@ -14,7 +14,11 @@ import { UnauthorizedError } from '../common/errors';
  * El middleware resuelve `JwtService` del contenedor para no acoplarse a
  * `AuthService` y permitir testear el middleware de forma aislada.
  */
-export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
+export const authMiddleware = (
+    req: Request,
+    _res: Response,
+    next: NextFunction,
+): void => {
     try {
         const header = req.headers.authorization;
         if (!header || !header.startsWith('Bearer ')) {
@@ -29,4 +33,4 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     } catch (err) {
         next(err);
     }
-}
+};

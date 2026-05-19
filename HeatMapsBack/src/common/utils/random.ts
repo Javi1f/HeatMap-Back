@@ -12,7 +12,7 @@ import crypto from 'crypto';
  * @example
  *   generateNumericCode(5) // "08423"
  */
-export function generateNumericCode(digits = 5): string {
+export const generateNumericCode = (digits = 5): string => {
     if (digits < 1 || digits > 12) {
         throw new RangeError('digits debe estar entre 1 y 12');
     }
@@ -20,4 +20,4 @@ export function generateNumericCode(digits = 5): string {
     // randomInt es uniforme y usa CSPRNG.
     const n = crypto.randomInt(0, max);
     return n.toString().padStart(digits, '0');
-}
+};

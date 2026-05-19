@@ -4,6 +4,7 @@ import { AllowedEmailsController } from './allowed-emails.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { validate } from '../../common/middlewares/validate.middleware';
 import { asyncHandler } from '../../common/middlewares/async-handler';
+import { generalRateLimiter } from '../../common/middlewares/rate-limit.middleware';
 import {
     addAllowedEmailSchema,
     allowedEmailIdParamSchema,
@@ -11,11 +12,14 @@ import {
 
 /**
  * Construye el router del módulo de correos permitidos.
- * Todas las rutas requieren admin autenticado.
+ * Todas las rutas requieren admin autenticado y están bajo el
+ * `generalRateLimiter`.
  */
-export function buildAllowedEmailsRouter(): Router {
+export const buildAllowedEmailsRouter = (): Router => {
     const router = Router();
     const ctrl = container.resolve(AllowedEmailsController);
+
+    router.use(generalRateLimiter);
 
     router.get('/', authMiddleware, asyncHandler(ctrl.getAll));
     router.post(
@@ -32,4 +36,4 @@ export function buildAllowedEmailsRouter(): Router {
     );
 
     return router;
-}
+};
