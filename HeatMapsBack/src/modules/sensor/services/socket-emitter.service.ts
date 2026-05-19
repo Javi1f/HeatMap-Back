@@ -61,10 +61,15 @@ export class SocketEmitterService {
 
     /**
      * Cierra el servidor de sockets. Idempotente.
+     *
+     * Capturamos `this.io` en una constante local para que el control de
+     * flujo del compilador (narrowing) elimine el posible `null` sin
+     * recurrir al operador `!` de aserción de no-nulo.
      */
     async close(): Promise<void> {
-        if (!this.io) return;
-        await new Promise<void>((resolve) => this.io!.close(() => resolve()));
+        const server = this.io;
+        if (!server) return;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
         this.io = null;
     }
 }

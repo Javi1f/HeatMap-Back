@@ -14,11 +14,31 @@ export interface IMailerService {
 }
 
 /**
+ * Construye el HTML del correo de verificación.
+ *
+ * Está aislada como función de módulo (no método de clase) porque no
+ * depende del estado de ninguna instancia y un método sin `this` es un
+ * anti-patrón. Tampoco se hace estática para evitar mezclar instancias y
+ * estáticos en la misma clase: una función de módulo es más simple.
+ *
+ * Si en el futuro hay varios templates o se migra a un motor (Handlebars,
+ * MJML), este módulo crecerá a una carpeta `templates/` con un template
+ * por archivo.
+ */
+const buildVerificationHtml = (code: string, minutes: number, maxAttempts: number): string => `
+            <h2>Verificación de cuenta</h2>
+            <p>Tu código de verificación es:</p>
+            <h1 style="letter-spacing: 8px;">${code}</h1>
+            <p>Este código expira en ${minutes} minutos.</p>
+            <p>Tienes ${maxAttempts} intentos. Si no solicitaste este registro, ignora este correo.</p>
+        `.trim();
+
+/**
  * Implementación basada en `nodemailer` SMTP.
  *
  * Encapsula:
  *  - Configuración del transporter (lazy: se crea en el constructor).
- *  - Templates HTML.
+ *  - Templates HTML (delegado a funciones de módulo).
  *  - Logging de envíos y fallos.
  */
 @singleton()
@@ -52,28 +72,12 @@ export class MailerService implements IMailerService {
                 from: `"HeatMaps" <${this.mailCfg.from}>`,
                 to,
                 subject: 'Código de verificación',
-                html: this.buildVerificationHtml(code, minutes, maxAttempts),
+                html: buildVerificationHtml(code, minutes, maxAttempts),
             });
             this.logger.info(`Código de verificación enviado a ${to}`);
         } catch (err) {
             this.logger.error(`Fallo enviando correo de verificación a ${to}`, err);
             throw err;
         }
-    }
-
-    /**
-     * Construye el HTML del correo de verificación.
-     *
-     * Mantener el template aquí (en lugar de cadenas en otros archivos)
-     * facilita migrarlo a un motor de templates (Handlebars, MJML).
-     */
-    private buildVerificationHtml(code: string, minutes: number, maxAttempts: number): string {
-        return `
-            <h2>Verificación de cuenta</h2>
-            <p>Tu código de verificación es:</p>
-            <h1 style="letter-spacing: 8px;">${code}</h1>
-            <p>Este código expira en ${minutes} minutos.</p>
-            <p>Tienes ${maxAttempts} intentos. Si no solicitaste este registro, ignora este correo.</p>
-        `.trim();
     }
 }

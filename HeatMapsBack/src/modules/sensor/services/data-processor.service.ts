@@ -11,7 +11,7 @@ import { ProcessedSensorData } from '../../../types/sensor.types';
  * para mantener trazabilidad en producción mientras el procesador real
  * se desarrolla.
  *
- * **Responsabilidades futuras**:
+ * **Responsabilidades futuras** (pendientes en el backlog del proyecto):
  *  1. Triangular dispositivos a partir de las lecturas RSSI de varios
  *     sensores (requiere coordenadas conocidas de los sensores).
  *  2. Almacenar lecturas crudas en una entidad `SensorReading` para
@@ -33,11 +33,12 @@ export class DataProcessorService {
     /**
      * Procesa y persiste un payload ya descifrado y normalizado.
      *
+     * En la implementación final hará triangulación + persistencia. Mientras
+     * tanto, solo deja un log de debug para confirmar el pipeline.
+     *
      * @param data - Datos del sensor listos para procesar.
      */
     processAndSave(data: ProcessedSensorData): Promise<void> {
-        // TODO(triangulation): implementar algoritmo de triangulación.
-        // TODO(persistence): guardar lectura cruda en BD.
         this.logger.debug(
             `processAndSave sensor=${data.sensor_id} devices=${data.total_devices}`,
         );

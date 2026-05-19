@@ -17,9 +17,9 @@ describe('DbFieldCipher', () => {
     });
 
     it('encrypt produce ciphertexts distintos para el mismo input (IV aleatorio)', () => {
-        const a = cipher.encrypt('foo');
-        const b = cipher.encrypt('foo');
-        expect(a).not.toBe(b);
+        const first = cipher.encrypt('foo');
+        const second = cipher.encrypt('foo');
+        expect(first).not.toBe(second);
     });
 
     it('hash es determinista, case-insensitive y trimea', () => {

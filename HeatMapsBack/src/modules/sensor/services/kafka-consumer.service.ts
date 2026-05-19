@@ -9,6 +9,29 @@ import { DataProcessorService } from './data-processor.service';
 import { SocketEmitterService } from './socket-emitter.service';
 
 /**
+ * Adapta `SensorPayload` (formato del productor Kafka) al
+ * `ProcessedSensorData` que se consume internamente y se emite a los clientes.
+ *
+ * Es una función pura (no depende del estado del consumer), por eso vive a
+ * nivel de módulo en lugar de como método de clase.
+ *
+ * @param data - Payload tal como llegó del sensor.
+ * @param bytesReceived - Bytes ocupados por el mensaje cifrado en Kafka.
+ */
+const normalizeSensorPayload = (
+    data: SensorPayload,
+    bytesReceived: number,
+): ProcessedSensorData => ({
+    sensor_id: data.sensor_id || '?',
+    total_devices: data.total_devices || 0,
+    timestamp: new Date(data.timestamp * 1000).toLocaleTimeString('es-ES'),
+    timestamp_raw: data.timestamp,
+    bytes_received: bytesReceived,
+    devices: data.devices || [],
+    received_at: new Date().toISOString(),
+});
+
+/**
  * Consumidor del topic de Kafka donde los sensores publican lecturas WiFi.
  *
  * Responsabilidades:
@@ -99,7 +122,7 @@ export class KafkaConsumerService {
             const data = this.cipher.decrypt(message.value);
             if (this.isStale(data)) return;
 
-            const processed = this.normalize(data, message.value.length);
+            const processed = normalizeSensorPayload(data, message.value.length);
             this.logger.info(
                 `${MESSAGES.KAFKA.DATA_RECEIVED}: Sensor ${processed.sensor_id} | ${processed.total_devices} dispositivos`,
             );
@@ -124,21 +147,5 @@ export class KafkaConsumerService {
             return true;
         }
         return false;
-    }
-
-    /**
-     * Adapta `SensorPayload` (formato del productor) al `ProcessedSensorData`
-     * que se consume internamente y se emite a los clientes.
-     */
-    private normalize(data: SensorPayload, bytesReceived: number): ProcessedSensorData {
-        return {
-            sensor_id: data.sensor_id || '?',
-            total_devices: data.total_devices || 0,
-            timestamp: new Date(data.timestamp * 1000).toLocaleTimeString('es-ES'),
-            timestamp_raw: data.timestamp,
-            bytes_received: bytesReceived,
-            devices: data.devices || [],
-            received_at: new Date().toISOString(),
-        };
     }
 }
