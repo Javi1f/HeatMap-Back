@@ -2,7 +2,6 @@ import {
     Column,
     CreateDateColumn,
     Entity,
-    Index,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from 'typeorm';
@@ -47,7 +46,12 @@ export class Admin {
     username: string;
 
     /** HMAC del username normalizado, para buscar sin descifrar. */
-    @Index()
+    /*
+     * Sin `@Index()`: una columna `unique` ya trae su propio índice. Declarar
+     * ambos hace que TypeORM emita dos índices con el mismo nombre generado
+     * —uno normal y otro único— y MySQL rechaza el CREATE TABLE con
+     * «Duplicate key name».
+     */
     @Column({ name: 'username_hash', unique: true, length: 64 })
     usernameHash: string;
 
@@ -56,7 +60,12 @@ export class Admin {
     email: string;
 
     /** HMAC del correo normalizado, para buscar sin descifrar. */
-    @Index()
+    /*
+     * Sin `@Index()`: una columna `unique` ya trae su propio índice. Declarar
+     * ambos hace que TypeORM emita dos índices con el mismo nombre generado
+     * —uno normal y otro único— y MySQL rechaza el CREATE TABLE con
+     * «Duplicate key name».
+     */
     @Column({ name: 'email_hash', unique: true, length: 64 })
     emailHash: string;
 
