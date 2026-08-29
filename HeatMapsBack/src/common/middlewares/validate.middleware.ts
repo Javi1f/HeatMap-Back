@@ -32,7 +32,6 @@ export const validate = <S extends ZodTypeAny>(
 ): RequestHandler => {
     return (req: Request, _res: Response, next: NextFunction): void => {
         const parsed = schema.parse(req[part]);
-        // Mutamos la parte correspondiente para que el controller la consuma ya validada.
         (req as unknown as Record<RequestPart, unknown>)[part] = parsed;
         next();
     };

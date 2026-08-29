@@ -15,16 +15,27 @@
  * a errores específicos sin parsear mensajes.
  */
 export enum ErrorCode {
+    /** El cuerpo o los parametros no pasaron el esquema Zod. */
     VALIDATION_FAILED = 'VALIDATION_FAILED',
+    /** Falta el token, es invalido o su sesion fue revocada. */
     UNAUTHORIZED = 'UNAUTHORIZED',
+    /** Autenticado, pero sin permiso sobre el recurso. */
     FORBIDDEN = 'FORBIDDEN',
+    /** El recurso solicitado no existe. */
     NOT_FOUND = 'NOT_FOUND',
+    /** Choca con el estado actual, por ejemplo un valor unico duplicado. */
     CONFLICT = 'CONFLICT',
+    /** Usuario o contrasena incorrectos. */
     INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+    /** El codigo de verificacion no coincide. */
     INVALID_VERIFICATION_CODE = 'INVALID_VERIFICATION_CODE',
+    /** El codigo de verificacion caduco. */
     VERIFICATION_CODE_EXPIRED = 'VERIFICATION_CODE_EXPIRED',
+    /** Se agotaron los intentos permitidos. */
     TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
+    /** El correo no esta en la lista blanca de registro. */
     EMAIL_NOT_ALLOWED = 'EMAIL_NOT_ALLOWED',
+    /** Fallo no previsto. No se detalla al cliente. */
     INTERNAL = 'INTERNAL',
 }
 
@@ -38,8 +49,13 @@ export type ErrorDetails = Record<string, unknown>;
  * deben extender de esta clase.
  */
 export class AppError extends Error {
+    /** Codigo HTTP con el que responder. */
     public readonly statusCode: number;
+
+    /** Codigo estable de la jerarquia, para que el cliente ramifique. */
     public readonly code: ErrorCode;
+
+    /** Detalle adicional. Solo se expone al cliente en desarrollo. */
     public readonly details?: ErrorDetails;
 
     constructor(

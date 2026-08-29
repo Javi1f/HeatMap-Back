@@ -6,6 +6,15 @@ import { ApiErrorResponse } from '../types/api-response';
 import { LoggerService } from '../logger/logger.service';
 
 /**
+ * `true` fuera de producción, donde sí se puede detallar el error.
+ *
+ * El detalle describe la forma interna de la petición —nombres de campos, rutas
+ * del esquema— y una parte de la API se sirve sin autenticación, así que en
+ * producción se omite: ayuda a depurar y también a tantear la API desde fuera.
+ */
+const detallable = (): boolean => process.env.NODE_ENV !== 'production';
+
+/**
  * Mapea un {@link AppError} (o subclase) a la forma de respuesta uniforme.
  */
 const fromAppError = (err: AppError): ApiErrorResponse => ({
@@ -13,7 +22,7 @@ const fromAppError = (err: AppError): ApiErrorResponse => ({
     message: err.message,
     code: err.code,
     statusCode: err.statusCode,
-    ...(err.details ? { details: err.details } : {}),
+    ...(err.details && detallable() ? { details: err.details } : {}),
 });
 
 /**
@@ -24,12 +33,16 @@ const fromZodError = (err: ZodError): ApiErrorResponse => ({
     message: 'Payload inválido',
     code: ErrorCode.VALIDATION_FAILED,
     statusCode: 400,
-    details: {
-        issues: err.issues.map((i) => ({
-            path: i.path.join('.'),
-            message: i.message,
-        })),
-    },
+    ...(detallable()
+        ? {
+              details: {
+                  issues: err.issues.map((i) => ({
+                      path: i.path.join('.'),
+                      message: i.message,
+                  })),
+              },
+          }
+        : {}),
 });
 
 /**

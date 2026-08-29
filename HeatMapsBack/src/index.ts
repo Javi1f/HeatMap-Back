@@ -8,6 +8,7 @@ import { DatabaseConfig } from './config/database.config';
 import { LoggerService } from './common/logger/logger.service';
 import { SocketEmitterService } from './modules/sensor/services/socket-emitter.service';
 import { KafkaConsumerService } from './modules/sensor/services/kafka-consumer.service';
+import { OccupancyAggregatorService } from './modules/sensor/services/occupancy-aggregator.service';
 import { MESSAGES } from './constants/messages';
 
 /**
@@ -23,12 +24,14 @@ const shutdownAll = async (
     httpServer: HttpServer,
     db: DatabaseConfig,
     consumer: KafkaConsumerService,
+    aggregator: OccupancyAggregatorService,
     emitter: SocketEmitterService,
     logger: LoggerService,
     signal: string,
 ): Promise<void> => {
     logger.info(`Señal ${signal} recibida, cerrando...`);
     try {
+        aggregator.stop();
         await consumer.stop();
         await emitter.close();
         await new Promise<void>((resolve, reject) =>
@@ -51,6 +54,7 @@ const registerShutdownHooks = (
     httpServer: HttpServer,
     db: DatabaseConfig,
     consumer: KafkaConsumerService,
+    aggregator: OccupancyAggregatorService,
     emitter: SocketEmitterService,
     logger: LoggerService,
 ): void => {
@@ -64,7 +68,7 @@ const registerShutdownHooks = (
      * @param signal - Señal POSIX recibida (`SIGINT` o `SIGTERM`).
      */
     const onSignal = (signal: NodeJS.Signals): void => {
-        shutdownAll(httpServer, db, consumer, emitter, logger, signal).catch((err) => {
+        shutdownAll(httpServer, db, consumer, aggregator, emitter, logger, signal).catch((err) => {
             logger.error('Fallo no manejado en shutdown', err);
             process.exitCode = 1;
         });
@@ -93,6 +97,7 @@ const bootstrap = async (): Promise<void> => {
     const db = container.resolve(DatabaseConfig);
     const emitter = container.resolve(SocketEmitterService);
     const consumer = container.resolve(KafkaConsumerService);
+    const aggregator = container.resolve(OccupancyAggregatorService);
 
     await db.initialize();
     logger.info('Base de datos conectada');
@@ -111,11 +116,14 @@ const bootstrap = async (): Promise<void> => {
         logger.error(MESSAGES.SERVER.START_ERROR, err);
     }
 
-    registerShutdownHooks(httpServer, db, consumer, emitter, logger);
+    // La consolidación de ocupación es independiente del consumer: aunque
+    // Kafka no esté disponible, sigue habiendo detecciones previas que agregar.
+    aggregator.start();
+
+    registerShutdownHooks(httpServer, db, consumer, aggregator, emitter, logger);
 };
 
 bootstrap().catch((err) => {
-    // Logger puede no estar inicializado aún; usamos console como último recurso.
     // eslint-disable-next-line no-console
     console.error('Error fatal al inicializar la aplicación', err);
     process.exitCode = 1;

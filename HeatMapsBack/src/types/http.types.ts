@@ -11,7 +11,12 @@ export type { ApiResponse, ApiSuccessResponse, ApiErrorResponse } from '../commo
  * Forma de la respuesta del endpoint `GET /kafka/status`.
  */
 export interface ConsumerStatusResponse {
+    /** Siempre `true`: consultar el estado nunca falla. */
     success: true;
+
+    /** `true` si el consumidor esta conectado y consumiendo. */
     running: boolean;
+
+    /** Version legible de `running`. */
     status: 'active' | 'stopped';
 }

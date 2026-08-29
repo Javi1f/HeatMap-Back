@@ -19,7 +19,13 @@ type BcryptLike = Pick<typeof bcrypt, 'hash' | 'compare'>;
  */
 @injectable()
 export class PasswordService {
+    /**
+     * Coste de bcrypt. Cada incremento duplica el trabajo: encarece el ataque
+     * por fuerza bruta y tambien el tiempo de login legitimo.
+     */
     private readonly rounds = 12;
+
+    /** Implementacion de bcrypt. Aislada para poder sustituirla en tests. */
     private readonly bcrypt: BcryptLike = bcrypt;
 
     /**

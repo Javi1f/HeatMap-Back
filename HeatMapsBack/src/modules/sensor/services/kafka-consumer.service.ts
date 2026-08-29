@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { singleton } from 'tsyringe';
 import { Consumer, EachMessagePayload, Kafka } from 'kafkajs';
 import { KafkaConfig } from '../../../config/kafka.config';
 import { SensorPayloadCipher } from '../../../crypto/sensor-payload.crypto';
@@ -44,13 +44,24 @@ const normalizeSensorPayload = (
  *
  * NO contiene lógica de negocio sobre los datos en sí — solo orquesta el
  * pipeline ingreso → proceso → notificación.
+ *
+ * Alcance único: la conexión y el estado `isRunning` describen un proceso, no
+ * una petición. Con alcance transitorio, el controlador que responde a
+ * `/kafka/status` consultaría una instancia distinta de la que consume, e
+ * informaría siempre de que está detenida.
  */
-@injectable()
+@singleton()
 export class KafkaConsumerService {
+    /** Cliente de KafkaJS. Se crea una sola vez y se reutiliza. */
     private kafka: Kafka | null = null;
+
+    /** Consumidor activo, o `null` mientras esta detenido. */
     private consumer: Consumer | null = null;
+
+    /** Estado interno que hace idempotentes a `start` y `stop`. */
     private isRunning = false;
 
+    /** Identificador del cliente ante el broker, visible en sus metricas. */
     private static readonly CLIENT_ID = 'sensor-consumer';
 
     constructor(

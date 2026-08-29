@@ -11,4 +11,5 @@ export const loginSchema = z.object({
     password: z.string().min(1, 'password es requerido'),
 });
 
+/** Cuerpo validado de `POST /api/auth/login`. */
 export type LoginDto = InferDto<typeof loginSchema>;

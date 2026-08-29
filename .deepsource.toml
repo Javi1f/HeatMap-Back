@@ -1,0 +1,18 @@
+version = 1
+
+exclude_patterns = [
+  "**/node_modules/**",
+  "**/dist/**",
+]
+
+test_patterns = [
+  "HeatMapsBack/tests/**",
+]
+
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  environment = ["nodejs"]
+  dialect = "typescript"
+  cyclomatic_complexity_threshold = "high"

@@ -10,8 +10,17 @@
  *  - Un símbolo único por token, exportado para inyección y registro.
  */
 
+/** `DataSource` de TypeORM ya inicializado. */
 export const DataSourceToken = Symbol('DataSource');
+
+/** Implementacion de `ILogger`. */
 export const LoggerToken = Symbol('Logger');
+
+/** Servidor de Socket.IO montado sobre el servidor HTTP. */
 export const SocketServerToken = Symbol('SocketServer');
+
+/** Cliente de KafkaJS configurado con TLS. */
 export const KafkaClientToken = Symbol('KafkaClient');
+
+/** Transporte de Nodemailer para el envio de correos. */
 export const MailTransporterToken = Symbol('MailTransporter');

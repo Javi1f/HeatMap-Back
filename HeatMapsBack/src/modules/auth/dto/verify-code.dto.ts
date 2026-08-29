@@ -14,4 +14,5 @@ export const verifyCodeSchema = z.object({
         .regex(/^\d{5}$/, 'code debe ser una cadena de 5 dígitos'),
 });
 
+/** Cuerpo validado de `POST /api/auth/verify-code`. */
 export type VerifyCodeDto = InferDto<typeof verifyCodeSchema>;

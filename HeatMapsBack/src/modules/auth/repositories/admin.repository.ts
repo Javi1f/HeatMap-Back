@@ -18,6 +18,8 @@ export interface IAdminRepository {
     findByUsernameHash(usernameHash: string): Promise<Admin | null>;
     /** Persiste un nuevo administrador. */
     create(data: Partial<Admin>): Promise<Admin>;
+    /** Devuelve todos los administradores, del más antiguo al más reciente. */
+    findAll(): Promise<Admin[]>;
 }
 
 /**
@@ -28,6 +30,7 @@ export interface IAdminRepository {
  */
 @injectable()
 export class AdminRepository implements IAdminRepository {
+    /** Repositorio TypeORM de la entidad gestionada. */
     private readonly repo: Repository<Admin>;
 
     constructor(db: DatabaseConfig) {
@@ -67,5 +70,15 @@ export class AdminRepository implements IAdminRepository {
      */
     create(data: Partial<Admin>): Promise<Admin> {
         return this.repo.save(this.repo.create(data));
+    }
+
+    /**
+     * Lista todos los administradores.
+     *
+     * Orden ascendente por id: el primer registrado es el fundador de la
+     * instancia y conviene que encabece la tabla del panel.
+     */
+    findAll(): Promise<Admin[]> {
+        return this.repo.find({ order: { id: 'ASC' } });
     }
 }

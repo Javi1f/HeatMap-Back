@@ -13,7 +13,12 @@
  * Payload firmado dentro del JWT del administrador.
  */
 export interface JwtPayload {
+    /** Identificador del administrador. */
     id: number;
+
+    /** Nombre de usuario ya descifrado. */
     username: string;
+
+    /** Correo ya descifrado. */
     email: string;
 }

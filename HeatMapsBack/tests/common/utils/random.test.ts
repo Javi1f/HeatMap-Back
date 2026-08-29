@@ -14,10 +14,14 @@ describe('generateNumericCode', () => {
         expect(() => generateNumericCode(13)).toThrow(RangeError);
     });
 
+    /**
+     * Con 6 dígitos y 50 muestras, que todas coincidan tiene una probabilidad
+     * despreciable, así que un único valor distinto basta como evidencia de
+     * que el generador no es determinista.
+     */
     it('genera valores distintos (no es determinista)', () => {
         const samples = new Set<string>();
         for (let i = 0; i < 50; i++) samples.add(generateNumericCode(6));
-        // Con 6 dígitos y 50 muestras es prácticamente imposible que todas coincidan.
         expect(samples.size).toBeGreaterThan(1);
     });
 });

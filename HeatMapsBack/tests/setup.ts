@@ -21,6 +21,7 @@ process.env.KAFKA_GROUP_ID = 'test-group';
 process.env.KAFKA_SSL_CA = 'Y2EK';
 process.env.KAFKA_SSL_CERT = 'Y2VydAo=';
 process.env.KAFKA_SSL_KEY = 'a2V5Cg==';
+process.env.MAC_HASH_KEY = HEX32;
 process.env.AES_KEY_1 = HEX32;
 process.env.AES_KEY_2 = HEX32;
 process.env.JWT_SECRET = 'x'.repeat(64);

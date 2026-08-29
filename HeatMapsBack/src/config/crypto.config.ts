@@ -12,10 +12,19 @@ import { EnvService } from '../common/env/env.service';
  */
 @singleton()
 export class CryptoConfig {
+    /** Clave AES-256-GCM de los campos cifrados en base de datos. */
     private readonly _dbEncryptionKey: Buffer;
+
+    /** Clave HMAC-SHA256 de los campos buscables. */
     private readonly _dbHmacKey: Buffer;
+
+    /** Clave AES-256-GCM de los payloads del frontend. */
     private readonly _frontendEncryptionKey: Buffer;
+
+    /** Primera clave de la cascada AES-256-CTR de Kafka. */
     private readonly _kafkaKey1: Buffer;
+
+    /** Segunda clave de la cascada AES-256-CTR de Kafka. */
     private readonly _kafkaKey2: Buffer;
 
     /** Tamaño del nonce usado por el cifrado de payloads de Kafka (bytes). */
