@@ -7,6 +7,7 @@ import { PendingRegistrationRepository } from './repositories/pending-registrati
 import { JwtService } from './services/jwt.service';
 import { PasswordService } from './services/password.service';
 import { VerificationCodeService } from './services/verification-code.service';
+import { SessionService } from './services/session.service';
 import { AllowedEmailsService } from '../allowed-emails/allowed-emails.service';
 import { MailerService } from '../mailer/mailer.service';
 import { DbFieldCipher } from '../../crypto/db-field.crypto';
@@ -29,20 +30,31 @@ import { VerifyCodeDto } from './dto/verify-code.dto';
  * que el frontend necesita; nunca devuelvas la entidad completa.
  */
 export interface AdminView {
+    /** Identificador del administrador. */
     id: number;
+
+    /** Nombre de usuario ya descifrado. */
     username: string;
+
+    /** Correo ya descifrado. */
     email: string;
 }
 
 /** Resultado de un login o verificación exitosa. */
 export interface AuthResult {
+    /** Datos publicos del administrador autenticado. */
     admin: AdminView;
+
+    /** JWT firmado, con su sesion ya abierta en base de datos. */
     token: string;
 }
 
 /** Resultado de iniciar el flujo de registro. */
 export interface RegisterResult {
+    /** Mensaje a mostrar mientras se espera el codigo. */
     message: string;
+
+    /** Discriminante: el registro nunca concluye sin verificar el correo. */
     verificationRequired: true;
 }
 
@@ -69,6 +81,7 @@ export class AuthService {
         private readonly allowed: AllowedEmailsService,
         private readonly mailer: MailerService,
         private readonly cipher: DbFieldCipher,
+        private readonly sessions: SessionService,
         private readonly logger: LoggerService,
     ) {}
 
@@ -77,7 +90,7 @@ export class AuthService {
      *
      * @throws {@link InvalidCredentialsError} si no existe o el password no coincide.
      */
-    async login(dto: LoginDto): Promise<AuthResult> {
+    async login(dto: LoginDto, ipOrigen: string | null = null): Promise<AuthResult> {
         const inputHash = this.cipher.hash(dto.username);
         const admin = await this.adminRepo.findByUsernameOrEmailHash(inputHash);
         if (!admin) throw new InvalidCredentialsError();
@@ -86,7 +99,7 @@ export class AuthService {
         if (!ok) throw new InvalidCredentialsError();
 
         const view = this.toView(admin);
-        const token = this.jwt.sign(view);
+        const token = await this.issueToken(view, ipOrigen);
         return { admin: view, token };
     }
 
@@ -152,7 +165,7 @@ export class AuthService {
      *
      * @throws {@link NotFoundError} si no hay pending para ese email.
      */
-    async verifyCode(dto: VerifyCodeDto): Promise<AuthResult> {
+    async verifyCode(dto: VerifyCodeDto, ipOrigen: string | null = null): Promise<AuthResult> {
         const emailHash = this.cipher.hash(dto.email);
         const pending = await this.pendingRepo.findByEmailHash(emailHash);
         if (!pending) {
@@ -180,7 +193,7 @@ export class AuthService {
         await this.pendingRepo.deleteById(pending.id);
 
         const view = this.toView(admin);
-        const token = this.jwt.sign(view);
+        const token = await this.issueToken(view, ipOrigen);
         return { admin: view, token };
     }
 
@@ -241,9 +254,28 @@ export class AuthService {
      * @param admin - Payload del JWT del admin que cierra sesión. Se usa para
      *   dejar trazabilidad en el log de auditoría.
      */
-    logout(admin: JwtPayload): { message: string } {
+    async logout(admin: JwtPayload, token?: string): Promise<{ message: string }> {
+        if (token) await this.sessions.closeByToken(token);
         this.logger.info(`Logout del admin id=${admin.id}`);
         return { message: 'Sesión cerrada exitosamente' };
+    }
+
+    /**
+     * Firma un token y abre la sesión correspondiente.
+     *
+     * Punto único de emisión: login y verificación de registro pasan ambos por
+     * aquí, así que ninguna vía puede entregar un token sin sesión asociada.
+     *
+     * @param view     - Datos públicos del administrador autenticado.
+     * @param ipOrigen - IP desde la que se inicia la sesión, si se conoce.
+     */
+    private async issueToken(view: AdminView, ipOrigen: string | null): Promise<string> {
+        const token = this.jwt.sign(view);
+        const expiresAt = this.jwt.expiryOf(token);
+        if (expiresAt) {
+            await this.sessions.open(view.id, token, expiresAt, ipOrigen);
+        }
+        return token;
     }
 
     /**

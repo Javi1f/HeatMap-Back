@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { JwtService } from '../modules/auth/services/jwt.service';
+import { SessionService } from '../modules/auth/services/session.service';
 import { UnauthorizedError } from '../common/errors';
 
 /**
@@ -14,11 +15,11 @@ import { UnauthorizedError } from '../common/errors';
  * El middleware resuelve `JwtService` del contenedor para no acoplarse a
  * `AuthService` y permitir testear el middleware de forma aislada.
  */
-export const authMiddleware = (
+export const authMiddleware = async (
     req: Request,
     _res: Response,
     next: NextFunction,
-): void => {
+): Promise<void> => {
     try {
         const header = req.headers.authorization;
         if (!header || !header.startsWith('Bearer ')) {
@@ -28,7 +29,15 @@ export const authMiddleware = (
         if (!token) throw new UnauthorizedError('Token vacío');
 
         const jwt = container.resolve(JwtService);
-        req.admin = jwt.verify(token);
+        const payload = jwt.verify(token);
+
+        const sessions = container.resolve(SessionService);
+        if (!(await sessions.isActive(token))) {
+            throw new UnauthorizedError('Sesión revocada o expirada');
+        }
+
+        req.admin = payload;
+        req.token = token;
         next();
     } catch (err) {
         next(err);

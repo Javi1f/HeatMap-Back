@@ -15,22 +15,26 @@ import {
  * - `email` y `addedBy` cifrados (AES-256-GCM).
  * - `emailHash` HMAC-SHA256 para búsqueda determinista.
  */
-@Entity('allowed_emails')
+@Entity('correo_permitido')
 export class AllowedEmail {
-    @PrimaryGeneratedColumn()
+    /** Clave primaria autonumerica. */
+    @PrimaryGeneratedColumn({ name: 'id_correo' })
     id: number;
 
-    @Column({ type: 'text' })
+    /** Correo autorizado, cifrado con AES-256-GCM. */
+    @Column({ name: 'email', type: 'text' })
     email: string;
 
+    /** HMAC del correo normalizado, para comprobar pertenencia sin descifrar. */
     @Index()
-    @Column({ unique: true, length: 64 })
+    @Column({ name: 'email_hash', unique: true, length: 64 })
     emailHash: string;
 
     /** Username (cifrado) del admin que añadió este correo a la lista. */
-    @Column({ type: 'text', nullable: true })
+    @Column({ name: 'anadido_por', type: 'text', nullable: true })
     addedBy: string;
 
-    @CreateDateColumn()
+    /** Momento en que se autorizo el correo. */
+    @CreateDateColumn({ name: 'fecha_anadido' })
     createdAt: Date;
 }

@@ -4,9 +4,16 @@ import { singleton } from 'tsyringe';
  * Niveles de severidad estándar.
  */
 export enum LogLevel {
+    /** Fallo que impide completar una operacion. */
     ERROR = 'ERROR',
+
+    /** Situacion anomala de la que el sistema se recupera. */
     WARN = 'WARN',
+
+    /** Hito normal del ciclo de vida. */
     INFO = 'INFO',
+
+    /** Detalle de diagnostico. Silenciado en produccion. */
     DEBUG = 'DEBUG',
 }
 
@@ -15,9 +22,16 @@ export enum LogLevel {
  * nunca de la implementación concreta, para poder mockearlo en tests.
  */
 export interface ILogger {
+    /** Registra un fallo que impide completar una operacion. */
     error(message: string, ...args: unknown[]): void;
+
+    /** Registra una anomalia de la que el sistema se recupera. */
     warn(message: string, ...args: unknown[]): void;
+
+    /** Registra un hito normal del ciclo de vida. */
     info(message: string, ...args: unknown[]): void;
+
+    /** Registra detalle de diagnostico. Silenciado en produccion. */
     debug(message: string, ...args: unknown[]): void;
 }
 
@@ -47,7 +61,14 @@ type Sink = (line: string, ...args: unknown[]) => void;
  */
 @singleton()
 export class LoggerService implements ILogger {
+    /** `true` fuera de produccion. Decide si el nivel DEBUG llega a consola. */
     private readonly isDevelopment = process.env.NODE_ENV !== 'production';
+
+    /**
+     * Destino de cada nivel, resuelto una sola vez en el constructor. Evita
+     * un `switch` por llamada y permite silenciar DEBUG sustituyendolo por
+     * una funcion vacia en lugar de comprobar el entorno cada vez.
+     */
     private readonly sinks: Record<LogLevel, Sink>;
 
     constructor() {

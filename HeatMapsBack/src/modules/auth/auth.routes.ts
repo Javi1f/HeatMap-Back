@@ -51,7 +51,7 @@ export const buildAuthRouter = (): Router => {
         validate(cancelVerificationSchema),
         asyncHandler(ctrl.cancelVerification),
     );
-    router.post('/logout', generalRateLimiter, authMiddleware, ctrl.logout);
+    router.post('/logout', generalRateLimiter, authMiddleware, asyncHandler(ctrl.logout));
     router.get('/session', generalRateLimiter, authMiddleware, ctrl.session);
 
     return router;

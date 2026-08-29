@@ -20,4 +20,5 @@ export const registerSchema = z.object({
     password: z.string().min(8, 'password debe tener al menos 8 caracteres'),
 });
 
+/** Cuerpo validado de `POST /api/auth/register`. */
 export type RegisterDto = InferDto<typeof registerSchema>;

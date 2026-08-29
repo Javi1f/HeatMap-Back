@@ -30,7 +30,7 @@ export class AuthController {
      * Devuelve `{ admin, token }` con 200.
      */
     login = async (req: Request, res: Response): Promise<void> => {
-        const result = await this.authService.login(req.body as LoginDto);
+        const result = await this.authService.login(req.body as LoginDto, req.ip ?? null);
         res.status(200).json(result);
     };
 
@@ -49,7 +49,7 @@ export class AuthController {
      * promueve el pending a admin definitivo. Devuelve `{ admin, token }`.
      */
     verifyCode = async (req: Request, res: Response): Promise<void> => {
-        const result = await this.authService.verifyCode(req.body as VerifyCodeDto);
+        const result = await this.authService.verifyCode(req.body as VerifyCodeDto, req.ip ?? null);
         res.status(200).json(result);
     };
 
@@ -69,9 +69,9 @@ export class AuthController {
      * Si en el futuro se implementa blacklist de tokens, se invocaría dentro
      * de `authService.logout()`.
      */
-    logout = (req: Request, res: Response): void => {
+    logout = async (req: Request, res: Response): Promise<void> => {
         if (!req.admin) throw new UnauthorizedError();
-        res.status(200).json(this.authService.logout(req.admin));
+        res.status(200).json(await this.authService.logout(req.admin, req.token));
     };
 
     /**

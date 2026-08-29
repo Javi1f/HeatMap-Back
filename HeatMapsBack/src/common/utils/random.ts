@@ -6,6 +6,10 @@ import crypto from 'crypto';
  * Reemplaza el anti-patrón `Math.floor(Math.random() * ...)`, que no es seguro
  * para casos como códigos de verificación (Math.random no es CSPRNG).
  *
+ * Usa `crypto.randomInt`, que reparte de forma uniforme sobre un generador
+ * criptográficamente seguro. Un `Math.random()` escalado sesgaría el resultado
+ * y sería predecible, inaceptable en un código de verificación.
+ *
  * @param digits - Número de dígitos del código (default 5).
  * @returns String con el código rellenado con ceros a la izquierda si hace falta.
  *
@@ -17,7 +21,6 @@ export const generateNumericCode = (digits = 5): string => {
         throw new RangeError('digits debe estar entre 1 y 12');
     }
     const max = 10 ** digits;
-    // randomInt es uniforme y usa CSPRNG.
     const n = crypto.randomInt(0, max);
     return n.toString().padStart(digits, '0');
 };

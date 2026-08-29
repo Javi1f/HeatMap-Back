@@ -21,6 +21,7 @@ import { Env, envSchema } from './env.schema';
  */
 @singleton()
 export class EnvService {
+    /** Variables ya validadas. Se congelan al construir el servicio. */
     private readonly env: Env;
 
     constructor() {

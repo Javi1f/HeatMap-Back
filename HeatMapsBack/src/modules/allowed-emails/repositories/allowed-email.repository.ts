@@ -30,6 +30,7 @@ export interface IAllowedEmailRepository {
  */
 @injectable()
 export class AllowedEmailRepository implements IAllowedEmailRepository {
+    /** Repositorio TypeORM de la entidad gestionada. */
     private readonly repo: Repository<AllowedEmail>;
 
     constructor(db: DatabaseConfig) {

@@ -10,6 +10,9 @@ import { LoggerService } from '../../common/logger/logger.service';
  * mocks en tests (ej. evitar enviar correos reales).
  */
 export interface IMailerService {
+    /**
+     * Envia el codigo de verificacion al correo indicado.
+     */
     sendVerificationCode(to: string, code: string): Promise<void>;
 }
 
@@ -43,6 +46,7 @@ const buildVerificationHtml = (code: string, minutes: number, maxAttempts: numbe
  */
 @singleton()
 export class MailerService implements IMailerService {
+    /** Transporte de Nodemailer, creado una vez y reutilizado. */
     private readonly transporter: Transporter;
 
     constructor(

@@ -9,9 +9,16 @@ import { ConflictError, NotFoundError } from '../../common/errors';
  * almacenada está cifrada; nunca la devolvemos directamente al exterior.
  */
 export interface AllowedEmailView {
+    /** Identificador del registro. */
     id: number;
+
+    /** Correo autorizado, ya descifrado. */
     email: string;
+
+    /** Username del admin que lo anadio, o `null` si no consta. */
     addedBy: string | null;
+
+    /** Momento en que se autorizo. */
     createdAt: Date;
 }
 

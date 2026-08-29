@@ -20,40 +20,48 @@ import {
  * indexable). El código de verificación también se cifra para no exponerlo
  * en backups o logs de queries.
  */
-@Entity('pending_registrations')
+@Entity('registro_pendiente')
 export class PendingRegistration {
-    @PrimaryGeneratedColumn()
+    /** Clave primaria autonumerica. */
+    @PrimaryGeneratedColumn({ name: 'id_registro' })
     id: number;
 
-    @Column({ type: 'text' })
+    /** Nombre de usuario cifrado con AES-256-GCM. */
+    @Column({ name: 'username', type: 'text' })
     username: string;
 
+    /** HMAC del username normalizado, para buscar sin descifrar. */
     @Index()
-    @Column({ unique: true, length: 64 })
+    @Column({ name: 'username_hash', unique: true, length: 64 })
     usernameHash: string;
 
-    @Column({ type: 'text' })
+    /** Correo cifrado con AES-256-GCM. */
+    @Column({ name: 'email', type: 'text' })
     email: string;
 
+    /** HMAC del correo normalizado, para buscar sin descifrar. */
     @Index()
-    @Column({ unique: true, length: 64 })
+    @Column({ name: 'email_hash', unique: true, length: 64 })
     emailHash: string;
 
     /** Password ya hasheado con bcrypt (no se cifra: bcrypt ya es no reversible). */
-    @Column({ type: 'text' })
+    @Column({ name: 'password_hash', type: 'text' })
     password: string;
 
     /** Código de verificación cifrado con AES-256-GCM. */
-    @Column({ type: 'text' })
+    @Column({ name: 'codigo', type: 'text' })
     code: string;
 
+    /** Caducidad del codigo. Indexado para poder purgar los vencidos. */
     @Index()
-    @Column()
+    @Column({ name: 'fecha_expiracion' })
     expiresAt: Date;
 
-    @Column({ default: 0 })
+    /** Intentos de verificacion consumidos. */
+    @Column({ name: 'intentos', default: 0 })
     attempts: number;
 
-    @CreateDateColumn()
+    /** Inicio del flujo de registro. */
+    @CreateDateColumn({ name: 'fecha_creacion' })
     createdAt: Date;
 }

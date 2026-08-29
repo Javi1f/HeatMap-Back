@@ -8,6 +8,10 @@ import { requestIdMiddleware } from './common/middlewares/request-id.middleware'
 import { buildAuthRouter } from './modules/auth/auth.routes';
 import { buildAllowedEmailsRouter } from './modules/allowed-emails/allowed-emails.routes';
 import { buildSensorRouter } from './modules/sensor/sensor.routes';
+import { buildMetricsRouter } from './modules/metrics/metrics.routes';
+import { buildUsersRouter } from './modules/users/users.routes';
+import { buildReportesRouter } from './modules/reportes/reportes.routes';
+import { buildPublicoRouter } from './modules/publico/publico.routes';
 
 /**
  * Construye y configura la aplicación Express.
@@ -43,8 +47,12 @@ export const createApp = (): Application => {
     app.use('/api', decryptRequest, encryptResponse);
     app.use('/kafka', decryptRequest, encryptResponse);
 
+    app.use('/api/publico', buildPublicoRouter());
     app.use('/api/auth', buildAuthRouter());
     app.use('/api/allowed-emails', buildAllowedEmailsRouter());
+    app.use('/api/users', buildUsersRouter());
+    app.use('/api/metrics', buildMetricsRouter());
+    app.use('/api/reportes', buildReportesRouter());
     app.use('/kafka', buildSensorRouter());
 
     app.use(notFoundHandler);

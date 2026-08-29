@@ -1,47 +1,104 @@
-import { injectable } from 'tsyringe';
+import { singleton } from 'tsyringe';
 import { LoggerService } from '../../../common/logger/logger.service';
 import { ProcessedSensorData } from '../../../types/sensor.types';
+import { CapturaInsert, CapturaRepository } from '../repositories/captura.repository';
+import { SensorRepository } from '../repositories/sensor.repository';
+import { ZonaRepository } from '../repositories/zona.repository';
+import { DistanceEstimatorService } from './distance-estimator.service';
+import { MacAnonymizerService } from './mac-anonymizer.service';
+
+/** Canal Wi-Fi por defecto cuando el sensor no lo reporta. */
+const UNKNOWN_CHANNEL = 0;
 
 /**
- * Servicio encargado de procesar y persistir los datos crudos recibidos
- * desde Kafka.
+ * Persiste las lecturas que llegan por Kafka.
  *
- * **Estado actual**: skeleton. La lógica de triangulación y persistencia
- * se implementará en una iteración futura. Hoy solo loguea la recepción
- * para mantener trazabilidad en producción mientras el procesador real
- * se desarrolla.
+ * Por cada lectura:
+ *  1. Garantiza que el nodo emisor esté registrado (auto-provisión en la zona
+ *     «Sin asignar» si es la primera vez que se le ve).
+ *  2. Anonimiza cada MAC con HMAC antes de tocar la base de datos.
+ *  3. Estima la distancia desde el RSSI con el modelo logarítmico.
+ *  4. Inserta el lote completo de detecciones.
  *
- * **Responsabilidades futuras** (pendientes en el backlog del proyecto):
- *  1. Triangular dispositivos a partir de las lecturas RSSI de varios
- *     sensores (requiere coordenadas conocidas de los sensores).
- *  2. Almacenar lecturas crudas en una entidad `SensorReading` para
- *     análisis histórico.
- *  3. Calcular agregados (densidad, dispositivos únicos) para los
- *     dashboards de "Históricos e Información".
+ * La agregación por zona **no** ocurre aquí: la hace `OccupancyAggregatorService`
+ * en ventanas cerradas. Mezclar ambas cosas obligaría a recalcular la ventana
+ * en cada mensaje, que es justo lo que la tabla agregada existe para evitar.
  *
- * **Patrón a seguir cuando se implemente**:
- *  - Recibir un repositorio inyectado (`SensorReadingRepository`).
- *  - Encapsular el algoritmo de triangulación en una clase aparte
- *    (`Triangulation`) testeable de forma aislada.
- *  - Devolver el resultado al `KafkaConsumerService` para que este decida
- *    qué emitir por WebSocket.
+ * Alcance único: la caché de nodos conocidos solo evita consultas si sobrevive
+ * entre mensajes, cosa que con alcance transitorio no ocurre.
  */
-@injectable()
+@singleton()
 export class DataProcessorService {
-    constructor(private readonly logger: LoggerService) {}
+    /**
+     * Cache de nodos ya vistos en este proceso. Evita una consulta de
+     * existencia por cada mensaje: un nodo que emite cada pocos segundos
+     * generaría miles de SELECT redundantes al día.
+     */
+    private readonly knownSensors = new Set<string>();
+
+    constructor(
+        private readonly capturas: CapturaRepository,
+        private readonly sensores: SensorRepository,
+        private readonly zonas: ZonaRepository,
+        private readonly anonymizer: MacAnonymizerService,
+        private readonly distance: DistanceEstimatorService,
+        private readonly logger: LoggerService,
+    ) {}
 
     /**
      * Procesa y persiste un payload ya descifrado y normalizado.
      *
-     * En la implementación final hará triangulación + persistencia. Mientras
-     * tanto, solo deja un log de debug para confirmar el pipeline.
+     * La marca de aleatorización se recalcula a partir del bit U/L en lugar de
+     * copiar la que envía el nodo: el estándar IEEE 802 es la fuente normativa
+     * y el resultado no debe depender de que el productor la haya interpretado
+     * bien.
      *
-     * @param data - Datos del sensor listos para procesar.
+     * Los errores se propagan al consumidor de Kafka, que los captura por
+     * mensaje: una lectura mal formada no debe tumbar el consumer ni impedir
+     * que se emita por WebSocket.
+     *
+     * @param data - Lectura de un nodo lista para persistir.
      */
-    processAndSave(data: ProcessedSensorData): Promise<void> {
-        this.logger.debug(
-            `processAndSave sensor=${data.sensor_id} devices=${data.total_devices}`,
-        );
-        return Promise.resolve();
+    async processAndSave(data: ProcessedSensorData): Promise<void> {
+        if (data.devices.length === 0) {
+            this.logger.debug(`Lectura sin dispositivos, sensor=${data.sensor_id}`);
+            return;
+        }
+
+        const seenAt = new Date(data.timestamp_raw * 1000);
+        await this.ensureSensorRegistered(data.sensor_id, seenAt);
+
+        const rows: CapturaInsert[] = data.devices.map((device) => ({
+            macHash: this.anonymizer.hash(device.mac),
+            idSensor: data.sensor_id,
+            rssi: Math.trunc(device.rssi),
+            distanciaEstimada: this.distance.estimate(device.rssi),
+            canal: Number(device.channel) || UNKNOWN_CHANNEL,
+            tipoTrama: (device.type || 'desconocido').slice(0, 20),
+            esMacRandom: this.anonymizer.isRandomized(device.mac),
+            timestampCaptura: seenAt,
+        }));
+
+        const inserted = await this.capturas.insertMany(rows);
+        this.logger.debug(`Persistidas ${inserted} detecciones de sensor=${data.sensor_id}`);
+    }
+
+    /**
+     * Registra el nodo si es la primera vez que publica y actualiza su marca
+     * de última conexión.
+     */
+    private async ensureSensorRegistered(idSensor: string, seenAt: Date): Promise<void> {
+        if (!this.knownSensors.has(idSensor)) {
+            const existing = await this.sensores.findById(idSensor);
+            if (!existing) {
+                const zona = await this.zonas.findOrCreateDefault();
+                await this.sensores.create(idSensor, zona.idZona);
+                this.logger.info(
+                    `Nodo de captura ${idSensor} registrado automáticamente en la zona «${zona.nombre}»`,
+                );
+            }
+            this.knownSensors.add(idSensor);
+        }
+        await this.sensores.touch(idSensor, seenAt);
     }
 }

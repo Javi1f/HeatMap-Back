@@ -21,6 +21,13 @@ declare module 'express-serve-static-core' {
         admin?: JwtPayload;
 
         /**
+         * JWT en crudo tal como llegó en la cabecera `Authorization`.
+         * Lo puebla `authMiddleware` para que el logout pueda revocar
+         * exactamente esa sesión sin volver a parsear la cabecera.
+         */
+        token?: string;
+
+        /**
          * Identificador único de la petición para correlacionar logs.
          * Inyectado por `requestIdMiddleware` al inicio del pipeline.
          */

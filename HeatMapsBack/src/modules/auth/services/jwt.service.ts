@@ -27,6 +27,23 @@ export class JwtService {
     }
 
     /**
+     * Momento de expiración de un token ya firmado.
+     *
+     * Se lee del propio token en lugar de recalcularlo a partir de
+     * `jwtExpiresIn`: así la fila de sesión y el JWT no pueden divergir aunque
+     * se cambie el formato de la configuración ("24h", "1d", segundos…).
+     *
+     * @returns La fecha de expiración, o `null` si el token no declara `exp`.
+     */
+    expiryOf(token: string): Date | null {
+        const decoded = jwt.decode(token);
+        if (!decoded || typeof decoded !== 'object' || typeof decoded.exp !== 'number') {
+            return null;
+        }
+        return new Date(decoded.exp * 1000);
+    }
+
+    /**
      * Verifica y decodifica un token. Lanza {@link UnauthorizedError} si
      * el token es inválido o ha expirado.
      */

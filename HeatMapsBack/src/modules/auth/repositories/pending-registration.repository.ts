@@ -30,6 +30,7 @@ export interface IPendingRegistrationRepository {
  */
 @injectable()
 export class PendingRegistrationRepository implements IPendingRegistrationRepository {
+    /** Repositorio TypeORM de la entidad gestionada. */
     private readonly repo: Repository<PendingRegistration>;
 
     constructor(db: DatabaseConfig) {

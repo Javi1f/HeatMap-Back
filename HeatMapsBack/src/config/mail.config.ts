@@ -8,22 +8,27 @@ import { EnvService } from '../common/env/env.service';
 export class MailConfig {
     constructor(private readonly env: EnvService) {}
 
+    /** Host del servidor SMTP. */
     get host(): string {
         return this.env.get('MAIL_HOST');
     }
 
+    /** Puerto del servidor SMTP. */
     get port(): number {
         return this.env.get('MAIL_PORT');
     }
 
+    /** Usuario de autenticacion SMTP. */
     get user(): string {
         return this.env.get('MAIL_USER');
     }
 
+    /** Contrasena de autenticacion SMTP. */
     get pass(): string {
         return this.env.get('MAIL_PASS');
     }
 
+    /** Direccion que figura como remitente. */
     get from(): string {
         return this.env.get('MAIL_FROM');
     }

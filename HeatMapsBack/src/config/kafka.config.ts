@@ -9,12 +9,25 @@ import { EnvService } from '../common/env/env.service';
  */
 @singleton()
 export class KafkaConfig {
+    /** Brokers del cluster, ya separados y recortados. */
     public readonly brokers: string[];
+
+    /** Topic del que se consumen las lecturas de los nodos. */
     public readonly topic: string;
+
+    /** Grupo de consumidores, que determina el reparto de particiones. */
     public readonly groupId: string;
+
+    /** Antiguedad maxima admitida en un mensaje, en segundos. */
     public readonly maxMessageAgeSeconds: number;
+
+    /** Autoridad certificadora del broker. */
     private readonly _ca: Buffer;
+
+    /** Certificado de cliente. */
     private readonly _cert: Buffer;
+
+    /** Clave privada del certificado de cliente. */
     private readonly _key: Buffer;
 
     constructor(env: EnvService) {
