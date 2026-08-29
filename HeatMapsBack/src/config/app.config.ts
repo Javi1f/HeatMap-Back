@@ -23,6 +23,11 @@ export class AppConfig {
         return this.env.get('CORS_ORIGIN');
     }
 
+    /** Saltos de proxy en los que confiar para deducir la IP del cliente. */
+    get trustProxy(): number {
+        return this.env.get('TRUST_PROXY');
+    }
+
     /** Configuración del subsistema de autenticación. */
     get auth(): {
         jwtSecret: string;

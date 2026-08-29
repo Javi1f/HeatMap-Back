@@ -36,6 +36,11 @@ export const createApp = (): Application => {
 
     app.disable('x-powered-by');
 
+    // Debe ir antes que cualquier middleware que lea `req.ip`: el limitador de
+    // tasa y el registro de sesiones dependen de que la IP sea la del cliente
+    // y no la del proxy que tenga delante.
+    app.set('trust proxy', cfg.trustProxy);
+
     app.use(requestIdMiddleware);
     app.use(cors({ origin: cfg.corsOrigin }));
     app.use(express.json({ limit: '1mb' }));
