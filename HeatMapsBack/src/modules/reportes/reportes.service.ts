@@ -47,6 +47,29 @@ export interface ReporteGenerado extends ReporteResumen {
 }
 
 /**
+ * Serializa una fila a CSV.
+ *
+ * Entrecomilla siempre y duplica las comillas internas. Es la única forma de
+ * que un mensaje de alerta que contenga una coma o un salto de línea no parta
+ * la fila en dos al abrir el archivo.
+ *
+ * Se exporta únicamente para poder probarla de forma aislada: el escapado es
+ * la parte del módulo con reglas propias y merece cobertura directa.
+ */
+export const aCsv = (valores: (string | number)[]): string =>
+    valores.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+
+/** Proyecta la entidad a la vista de listado. */
+const resumir = (r: Reporte): ReporteResumen => ({
+    idReporte: r.idReporte,
+    tipoReporte: r.tipoReporte,
+    zona: r.zona?.nombre ?? null,
+    rangoInicio: r.rangoInicio.toISOString(),
+    rangoFin: r.rangoFin.toISOString(),
+    fechaGeneracion: r.fechaGeneracion.toISOString(),
+});
+
+/**
  * Genera y administra los reportes de ocupación.
  *
  * **Qué se guarda y qué no**: se persiste la *definición* del reporte (rango,
@@ -99,7 +122,7 @@ export class ReportesService {
     /** Definiciones guardadas, sin calcular sus datos. */
     async listar(): Promise<ReporteResumen[]> {
         const filas = await this.reportes.findAll();
-        return filas.map((r) => this.resumir(r));
+        return filas.map((r) => resumir(r));
     }
 
     /**
@@ -146,25 +169,13 @@ export class ReportesService {
             nombreArchivo: `${reporte.tipoReporte}_${fecha}.csv`,
             // El BOM hace que Excel abra el archivo como UTF-8; sin él,
             // destroza los acentos de los nombres de zona.
-            contenido: '﻿' + lineas.join('\r\n') + '\r\n',
-        };
-    }
-
-    /** Proyecta la entidad a la vista de listado. */
-    private resumir(r: Reporte): ReporteResumen {
-        return {
-            idReporte: r.idReporte,
-            tipoReporte: r.tipoReporte,
-            zona: r.zona?.nombre ?? null,
-            rangoInicio: r.rangoInicio.toISOString(),
-            rangoFin: r.rangoFin.toISOString(),
-            fechaGeneracion: r.fechaGeneracion.toISOString(),
+            contenido: `\ufeff${lineas.join('\r\n')}\r\n`,
         };
     }
 
     /** Ejecuta la consulta que corresponde al tipo del reporte. */
     private async calcular(r: Reporte): Promise<ReporteGenerado> {
-        const base = this.resumir(r);
+        const base = resumir(r);
         const { columnas, filas } = await this.datos(
             r.tipoReporte as TipoReporte,
             r.rangoInicio,
@@ -236,16 +247,3 @@ export class ReportesService {
         };
     }
 }
-
-/**
- * Serializa una fila a CSV.
- *
- * Entrecomilla siempre y duplica las comillas internas. Es la única forma de
- * que un mensaje de alerta que contenga una coma o un salto de línea no parta
- * la fila en dos al abrir el archivo.
- *
- * Se exporta únicamente para poder probarla de forma aislada: el escapado es
- * la parte del módulo con reglas propias y merece cobertura directa.
- */
-export const aCsv = (valores: (string | number)[]): string =>
-    valores.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');

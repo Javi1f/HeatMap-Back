@@ -5,6 +5,23 @@ import { JwtPayload } from '../../../types/auth.types';
 import { UnauthorizedError } from '../../../common/errors';
 
 /**
+ * Momento de expiración de un token ya firmado.
+ *
+ * Se lee del propio token en lugar de recalcularlo a partir de
+ * `jwtExpiresIn`: así la fila de sesión y el JWT no pueden divergir aunque
+ * se cambie el formato de la configuración ("24h", "1d", segundos…).
+ *
+ * @returns La fecha de expiración, o `null` si el token no declara `exp`.
+ */
+const expiryOf = (token: string): Date | null => {
+    const decoded = jwt.decode(token);
+    if (!decoded || typeof decoded !== 'object' || typeof decoded.exp !== 'number') {
+        return null;
+    }
+    return new Date(decoded.exp * 1000);
+};
+
+/**
  * Servicio dedicado al manejo de JWT.
  *
  * Aislar firma y verificación en un servicio propio permite:
@@ -14,6 +31,9 @@ import { UnauthorizedError } from '../../../common/errors';
  */
 @injectable()
 export class JwtService {
+    /** Fecha de expiración declarada por el token, o `null` si no la declara. */
+    readonly expiryOf = expiryOf;
+
     constructor(private readonly cfg: AppConfig) {}
 
     /**
@@ -24,23 +44,6 @@ export class JwtService {
             expiresIn: this.cfg.auth.jwtExpiresIn as SignOptions['expiresIn'],
         };
         return jwt.sign(payload, this.cfg.auth.jwtSecret, options);
-    }
-
-    /**
-     * Momento de expiración de un token ya firmado.
-     *
-     * Se lee del propio token en lugar de recalcularlo a partir de
-     * `jwtExpiresIn`: así la fila de sesión y el JWT no pueden divergir aunque
-     * se cambie el formato de la configuración ("24h", "1d", segundos…).
-     *
-     * @returns La fecha de expiración, o `null` si el token no declara `exp`.
-     */
-    expiryOf(token: string): Date | null {
-        const decoded = jwt.decode(token);
-        if (!decoded || typeof decoded !== 'object' || typeof decoded.exp !== 'number') {
-            return null;
-        }
-        return new Date(decoded.exp * 1000);
     }
 
     /**

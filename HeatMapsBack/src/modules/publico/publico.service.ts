@@ -89,6 +89,44 @@ export interface MapaPublico {
     hasta: string;
 }
 
+/** `true` si la zona declara un ancho y un alto utilizables. */
+const tieneGeometria = (coordenadas: Record<string, unknown> | null): boolean => {
+    if (!coordenadas) return false;
+    const ancho = Number(coordenadas.ancho);
+    const alto = Number(coordenadas.alto);
+    return Number.isFinite(ancho) && Number.isFinite(alto) && ancho > 0 && alto > 0;
+};
+
+/**
+ * Proyecta el mapa interno a su versión pública.
+ *
+ * Construye el objeto campo a campo en lugar de copiar y borrar: lo que no
+ * se nombra aquí no puede salir, aunque el mapa interno crezca.
+ */
+const despojar = (mapa: MapaDeCalor): MapaPublico => {
+    const ventanaMs = new Date(mapa.hasta).getTime() - new Date(mapa.desde).getTime();
+
+    return {
+        nombre: mapa.nombre,
+        ancho: mapa.ancho,
+        alto: mapa.alto,
+        ladoCelda: mapa.ladoCelda,
+        columnas: mapa.columnas,
+        filas: mapa.filas,
+        rejilla: mapa.rejilla,
+        maximo: mapa.maximo,
+        situados: mapa.situados,
+        nodos: mapa.nodos.map((n) => ({
+            nombre: n.nombre,
+            x: n.x,
+            y: n.y,
+            aportoDatos: n.aportoDatos,
+        })),
+        ventanaMinutos: Math.round(ventanaMs / 60_000),
+        hasta: mapa.hasta,
+    };
+};
+
 /**
  * Vista pública del sistema: qué puede consultar cualquiera sin autenticarse.
  *
@@ -143,44 +181,6 @@ export class PublicoService {
      */
     async mapa(idZona: string, minutos?: number): Promise<MapaPublico> {
         const completo = await this.heatmap.generar(idZona, minutos);
-        return this.despojar(completo);
+        return despojar(completo);
     }
-
-    /**
-     * Proyecta el mapa interno a su versión pública.
-     *
-     * Construye el objeto campo a campo en lugar de copiar y borrar: lo que no
-     * se nombra aquí no puede salir, aunque el mapa interno crezca.
-     */
-    private despojar(m: MapaDeCalor): MapaPublico {
-        const ventanaMs = new Date(m.hasta).getTime() - new Date(m.desde).getTime();
-
-        return {
-            nombre: m.nombre,
-            ancho: m.ancho,
-            alto: m.alto,
-            ladoCelda: m.ladoCelda,
-            columnas: m.columnas,
-            filas: m.filas,
-            rejilla: m.rejilla,
-            maximo: m.maximo,
-            situados: m.situados,
-            nodos: m.nodos.map((n) => ({
-                nombre: n.nombre,
-                x: n.x,
-                y: n.y,
-                aportoDatos: n.aportoDatos,
-            })),
-            ventanaMinutos: Math.round(ventanaMs / 60_000),
-            hasta: m.hasta,
-        };
-    }
-}
-
-/** `true` si la zona declara un ancho y un alto utilizables. */
-function tieneGeometria(coordenadas: Record<string, unknown> | null): boolean {
-    if (!coordenadas) return false;
-    const ancho = Number(coordenadas.ancho);
-    const alto = Number(coordenadas.alto);
-    return Number.isFinite(ancho) && Number.isFinite(alto) && ancho > 0 && alto > 0;
 }

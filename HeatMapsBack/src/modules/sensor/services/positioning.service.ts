@@ -35,6 +35,109 @@ const MARGEN_FUERA_M = 2;
 const DET_MINIMO = 1e-9;
 
 /**
+ * Resuelve la posición con tres o más observaciones, por mínimos cuadrados.
+ *
+ * Restar la ecuación de una circunferencia a las demás elimina los términos
+ * cuadráticos y deja un sistema lineal. Con tres nodos el sistema es exacto;
+ * con más, se resuelve por mínimos cuadrados, que reparte el error del RSSI
+ * entre todas las medidas en lugar de confiar en tres.
+ *
+ * @returns El punto, o `null` si los nodos están alineados y el sistema es
+ *          indeterminado.
+ */
+const trilaterar = (obs: Observacion[]): Punto | null => {
+    const ref = obs[0];
+
+    // Ecuaciones normales del sistema linealizado: A·p = b, resuelto como
+    // (AᵀA)·p = Aᵀb, que para dos incógnitas es un 2×2.
+    let aa = 0;
+    let ab = 0;
+    let bb = 0;
+    let ar = 0;
+    let br = 0;
+
+    for (let i = 1; i < obs.length; i++) {
+        const obsI = obs[i];
+        const coefX = 2 * (obsI.x - ref.x);
+        const coefY = 2 * (obsI.y - ref.y);
+        const termino =
+            ref.d * ref.d - obsI.d * obsI.d +
+            obsI.x * obsI.x - ref.x * ref.x +
+            obsI.y * obsI.y - ref.y * ref.y;
+
+        aa += coefX * coefX;
+        ab += coefX * coefY;
+        bb += coefY * coefY;
+        ar += coefX * termino;
+        br += coefY * termino;
+    }
+
+    const det = aa * bb - ab * ab;
+    if (Math.abs(det) < DET_MINIMO) return null;
+
+    return {
+        x: (ar * bb - br * ab) / det,
+        y: (aa * br - ab * ar) / det,
+    };
+};
+
+/**
+ * Resuelve la posición con solo dos observaciones.
+ *
+ * Dos circunferencias se cortan en dos puntos, uno a cada lado de la recta que
+ * une los nodos. Se devuelve el punto medio de ambos —el pie de esa recta—
+ * porque sin una tercera medida no hay forma de saber cuál de los dos es, y
+ * elegir al azar introduciría un error mayor que quedarse en el centro.
+ *
+ * Cuando las circunferencias no llegan a cortarse, que con RSSI ruidoso ocurre
+ * a menudo, se toma igualmente ese pie: es la posición más compatible con las
+ * dos distancias, aunque ninguna se cumpla exactamente.
+ *
+ * @returns El punto, o `null` si los dos nodos comparten posición.
+ */
+const interseccion = (a: Observacion, b: Observacion): Punto | null => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const separacion = Math.hypot(dx, dy);
+
+    if (separacion < DET_MINIMO) return null;
+
+    // Distancia desde `a` al pie de la recta que une los dos puntos de corte.
+    const avance = (a.d * a.d - b.d * b.d + separacion * separacion) / (2 * separacion);
+
+    return {
+        x: a.x + (avance * dx) / separacion,
+        y: a.y + (avance * dy) / separacion,
+    };
+};
+
+/** Comprueba que el punto caiga dentro de la zona, con el margen tolerado. */
+const dentroDeLimites = (punto: Punto, limites: Limites): boolean =>
+    punto.x >= -MARGEN_FUERA_M &&
+    punto.y >= -MARGEN_FUERA_M &&
+    punto.x <= limites.ancho + MARGEN_FUERA_M &&
+    punto.y <= limites.alto + MARGEN_FUERA_M;
+
+/**
+ * Estima la posición de un dispositivo a partir de las observaciones de los
+ * nodos que lo vieron.
+ *
+ * @param obs     - Una entrada por nodo que detectó al dispositivo.
+ * @param limites - Rectángulo de la zona, para descartar imposibles.
+ * @returns El punto estimado, o `null` si no hay datos suficientes o la
+ *          solución cae fuera de la zona.
+ */
+const estimar = (obs: Observacion[], limites: Limites): Punto | null => {
+    const punto =
+        obs.length >= 3 ? trilaterar(obs) :
+        obs.length === 2 ? interseccion(obs[0], obs[1]) :
+        null;
+
+    if (!punto) return null;
+    return dentroDeLimites(punto, limites) ? punto : null;
+};
+
+/**
  * Sitúa dispositivos en el plano a partir de distancias a nodos conocidos.
  *
  * **Qué resuelve**: cada nodo aporta una circunferencia —el dispositivo está a
@@ -62,100 +165,5 @@ export class PositioningService {
      * @returns El punto estimado, o `null` si no hay datos suficientes o la
      *          solución cae fuera de la zona.
      */
-    estimar(obs: Observacion[], limites: Limites): Punto | null {
-        const punto =
-            obs.length >= 3 ? trilaterar(obs) :
-            obs.length === 2 ? interseccion(obs[0], obs[1]) :
-            null;
-
-        if (!punto) return null;
-        return dentroDeLimites(punto, limites) ? punto : null;
-    }
-}
-
-/**
- * Resuelve la posición con tres o más observaciones, por mínimos cuadrados.
- *
- * Restar la ecuación de una circunferencia a las demás elimina los términos
- * cuadráticos y deja un sistema lineal. Con tres nodos el sistema es exacto;
- * con más, se resuelve por mínimos cuadrados, que reparte el error del RSSI
- * entre todas las medidas en lugar de confiar en tres.
- *
- * @returns El punto, o `null` si los nodos están alineados y el sistema es
- *          indeterminado.
- */
-function trilaterar(obs: Observacion[]): Punto | null {
-    const ref = obs[0];
-
-    // Ecuaciones normales del sistema linealizado: A·p = b, resuelto como
-    // (AᵀA)·p = Aᵀb, que para dos incógnitas es un 2×2.
-    let aa = 0;
-    let ab = 0;
-    let bb = 0;
-    let ar = 0;
-    let br = 0;
-
-    for (let i = 1; i < obs.length; i++) {
-        const o = obs[i];
-        const a = 2 * (o.x - ref.x);
-        const b = 2 * (o.y - ref.y);
-        const r =
-            ref.d * ref.d - o.d * o.d +
-            o.x * o.x - ref.x * ref.x +
-            o.y * o.y - ref.y * ref.y;
-
-        aa += a * a;
-        ab += a * b;
-        bb += b * b;
-        ar += a * r;
-        br += b * r;
-    }
-
-    const det = aa * bb - ab * ab;
-    if (Math.abs(det) < DET_MINIMO) return null;
-
-    return {
-        x: (ar * bb - br * ab) / det,
-        y: (aa * br - ab * ar) / det,
-    };
-}
-
-/**
- * Resuelve la posición con solo dos observaciones.
- *
- * Dos circunferencias se cortan en dos puntos, uno a cada lado de la recta que
- * une los nodos. Se devuelve el punto medio de ambos —el pie de esa recta—
- * porque sin una tercera medida no hay forma de saber cuál de los dos es, y
- * elegir al azar introduciría un error mayor que quedarse en el centro.
- *
- * Cuando las circunferencias no llegan a cortarse, que con RSSI ruidoso ocurre
- * a menudo, se toma igualmente ese pie: es la posición más compatible con las
- * dos distancias, aunque ninguna se cumpla exactamente.
- *
- * @returns El punto, o `null` si los dos nodos comparten posición.
- */
-function interseccion(a: Observacion, b: Observacion): Punto | null {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const separacion = Math.hypot(dx, dy);
-
-    if (separacion < DET_MINIMO) return null;
-
-    // Distancia desde `a` al pie de la recta que une los dos puntos de corte.
-    const t = (a.d * a.d - b.d * b.d + separacion * separacion) / (2 * separacion);
-
-    return {
-        x: a.x + (t * dx) / separacion,
-        y: a.y + (t * dy) / separacion,
-    };
-}
-
-/** Comprueba que el punto caiga dentro de la zona, con el margen tolerado. */
-function dentroDeLimites(p: Punto, l: Limites): boolean {
-    return (
-        p.x >= -MARGEN_FUERA_M &&
-        p.y >= -MARGEN_FUERA_M &&
-        p.x <= l.ancho + MARGEN_FUERA_M &&
-        p.y <= l.alto + MARGEN_FUERA_M
-    );
+    readonly estimar = estimar;
 }

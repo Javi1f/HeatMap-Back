@@ -65,16 +65,29 @@ describe('DistanceEstimatorService', () => {
         expect(estimator.estimate(-70)).toBeCloseTo(10, 1);
     });
 
+    /**
+     * Estima y falla con un mensaje útil si el RSSI no da distancia.
+     *
+     * Sustituye a la aserción de no nulidad: estrecha el tipo de verdad y, si
+     * algún día deja de haber distancia, el fallo dice qué RSSI la provocó en
+     * lugar de reventar comparando contra `null`.
+     */
+    const distanciaDe = (rssi: number): number => {
+        const metros = estimator.estimate(rssi);
+        if (metros === null) throw new Error(`RSSI ${rssi} no produjo distancia`);
+        return metros;
+    };
+
     it('crece de forma monótona al debilitarse la señal', () => {
-        const cerca = estimator.estimate(-45)!;
-        const medio = estimator.estimate(-60)!;
-        const lejos = estimator.estimate(-80)!;
+        const cerca = distanciaDe(-45);
+        const medio = distanciaDe(-60);
+        const lejos = distanciaDe(-80);
         expect(cerca).toBeLessThan(medio);
         expect(medio).toBeLessThan(lejos);
     });
 
     it('estima por debajo de un metro con señal más fuerte que la referencia', () => {
-        expect(estimator.estimate(-25)!).toBeLessThan(1);
+        expect(distanciaDe(-25)).toBeLessThan(1);
     });
 
     it('descarta RSSI no utilizables', () => {

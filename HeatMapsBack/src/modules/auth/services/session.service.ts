@@ -5,6 +5,15 @@ import { SesionAuthRepository } from '../repositories/sesion-auth.repository';
 import { LoggerService } from '../../../common/logger/logger.service';
 
 /**
+ * Huella determinista de un token, usada como clave de la sesión.
+ *
+ * SHA-256 sin clave es suficiente aquí (a diferencia de las MAC): un JWT tiene
+ * entropía de sobra, no es enumerable por fuerza bruta.
+ */
+const fingerprint = (token: string): string =>
+    crypto.createHash('sha256').update(token).digest('hex');
+
+/**
  * Ciclo de vida de las sesiones de administrador.
  *
  * Convierte el esquema de JWT puro (donde `logout` no invalidaba nada y un
@@ -22,22 +31,15 @@ export class SessionService {
         private readonly logger: LoggerService,
     ) {}
 
-    /**
-     * Huella determinista de un token, usada como clave de la sesión.
-     *
-     * SHA-256 sin clave es suficiente aquí (a diferencia de las MAC): un JWT
-     * tiene entropía de sobra, no es enumerable por fuerza bruta.
-     */
-    fingerprint(token: string): string {
-        return crypto.createHash('sha256').update(token).digest('hex');
-    }
+    /** Huella determinista de un token, usada como clave de la sesión. */
+    readonly fingerprint = fingerprint;
 
     /**
      * Abre una sesión para un token recién emitido.
      *
      * @param expiresAt - Expiración del propio JWT, para que ambas coincidan.
      */
-    async open(
+    open(
         idAdmin: number,
         token: string,
         expiresAt: Date,
@@ -45,7 +47,7 @@ export class SessionService {
     ): Promise<SesionAuth> {
         return this.repo.create({
             idAdmin,
-            tokenHash: this.fingerprint(token),
+            tokenHash: fingerprint(token),
             ipOrigen,
             fechaExpiracion: expiresAt,
             revocada: false,
@@ -62,14 +64,14 @@ export class SessionService {
      * son revocables.
      */
     async isActive(token: string): Promise<boolean> {
-        const sesion = await this.repo.findByTokenHash(this.fingerprint(token));
+        const sesion = await this.repo.findByTokenHash(fingerprint(token));
         if (!sesion) return true;
         return !sesion.revocada && sesion.fechaExpiracion.getTime() > Date.now();
     }
 
     /** Cierra la sesión asociada a un token concreto. */
     async closeByToken(token: string): Promise<void> {
-        await this.repo.revokeByTokenHash(this.fingerprint(token));
+        await this.repo.revokeByTokenHash(fingerprint(token));
     }
 
     /** Revoca una sesión por id. @returns `true` si estaba abierta. */

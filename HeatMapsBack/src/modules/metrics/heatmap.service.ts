@@ -95,6 +95,26 @@ export interface MapaDeCalor {
 }
 
 /**
+ * Extrae ancho y alto de la geometría guardada en la zona.
+ *
+ * @returns Los límites, o `null` si la zona no los declara o no son válidos.
+ */
+const leerGeometria = (coordenadas: Record<string, unknown> | null): Limites | null => {
+    if (!coordenadas) return null;
+
+    const ancho = Number(coordenadas.ancho);
+    const alto = Number(coordenadas.alto);
+
+    if (!Number.isFinite(ancho) || !Number.isFinite(alto)) return null;
+    if (ancho <= 0 || alto <= 0) return null;
+
+    return { ancho, alto };
+};
+
+/** Restringe un valor al rango indicado, ambos extremos incluidos. */
+const acotar = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);
+
+/**
  * Construye mapas de calor de ocupación a partir de las detecciones crudas.
  *
  * **El recorrido**: se toman las detecciones de la ventana, se promedia la
@@ -214,23 +234,3 @@ export class HeatmapService {
         return { rejilla, maximo, situados, sinPosicion };
     }
 }
-
-/**
- * Extrae ancho y alto de la geometría guardada en la zona.
- *
- * @returns Los límites, o `null` si la zona no los declara o no son válidos.
- */
-function leerGeometria(coordenadas: Record<string, unknown> | null): Limites | null {
-    if (!coordenadas) return null;
-
-    const ancho = Number(coordenadas.ancho);
-    const alto = Number(coordenadas.alto);
-
-    if (!Number.isFinite(ancho) || !Number.isFinite(alto)) return null;
-    if (ancho <= 0 || alto <= 0) return null;
-
-    return { ancho, alto };
-}
-
-/** Restringe un valor al rango indicado, ambos extremos incluidos. */
-const acotar = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);

@@ -31,10 +31,10 @@ describe('PositioningService', () => {
             ['esquina sin nodo', { x: 17.64, y: 0 }],
             ['borde inferior', { x: 12, y: 0.2 }],
         ])('sitúa el dispositivo en %s', (_caso, esperado) => {
-            const p = posicionador.estimar(observar(esperado), PLAZA);
-            expect(p).not.toBeNull();
-            expect(p!.x).toBeCloseTo(esperado.x, 6);
-            expect(p!.y).toBeCloseTo(esperado.y, 6);
+            const punto = posicionador.estimar(observar(esperado), PLAZA);
+            expect(punto).not.toBeNull();
+            expect(punto?.x).toBeCloseTo(esperado.x, 6);
+            expect(punto?.y).toBeCloseTo(esperado.y, 6);
         });
     });
 
@@ -49,21 +49,21 @@ describe('PositioningService', () => {
             const ruido = [0.5, -0.4, 0.3];
             const obs = observar(real).map((o, i) => ({ ...o, d: o.d + ruido[i] }));
 
-            const p = posicionador.estimar(obs, PLAZA);
-            expect(p).not.toBeNull();
-            expect(Math.hypot(p!.x - real.x, p!.y - real.y)).toBeLessThan(1.5);
+            const punto = posicionador.estimar(obs, PLAZA);
+            expect(punto).not.toBeNull();
+            expect(Math.hypot(punto?.x - real.x, punto?.y - real.y)).toBeLessThan(1.5);
         });
     });
 
     describe('con dos nodos', () => {
         it('devuelve un punto sobre la recta entre ambos cortes', () => {
             const real = { x: 4, y: 4.55 };
-            const p = posicionador.estimar(observar(real, [S1, S2]), PLAZA);
+            const punto = posicionador.estimar(observar(real, [S1, S2]), PLAZA);
 
-            expect(p).not.toBeNull();
+            expect(punto).not.toBeNull();
             // Sin tercera medida la componente X no se puede recuperar, pero la
             // altura sí queda determinada por las dos distancias.
-            expect(p!.y).toBeCloseTo(real.y, 6);
+            expect(punto?.y).toBeCloseTo(real.y, 6);
         });
 
         it('resuelve aunque las circunferencias no lleguen a cortarse', () => {
@@ -71,9 +71,9 @@ describe('PositioningService', () => {
                 { ...S1, d: 1 },
                 { ...S2, d: 1 },
             ];
-            const p = posicionador.estimar(obs, PLAZA);
-            expect(p).not.toBeNull();
-            expect(p!.y).toBeCloseTo(4.55, 6);
+            const punto = posicionador.estimar(obs, PLAZA);
+            expect(punto).not.toBeNull();
+            expect(punto?.y).toBeCloseTo(4.55, 6);
         });
     });
 
@@ -106,18 +106,18 @@ describe('PositioningService', () => {
 
     describe('límites de la zona', () => {
         it('acepta una posición justo en el borde', () => {
-            const p = posicionador.estimar(observar({ x: 0, y: 0 }), PLAZA);
-            expect(p).not.toBeNull();
+            const punto = posicionador.estimar(observar({ x: 0, y: 0 }), PLAZA);
+            expect(punto).not.toBeNull();
         });
 
         it('acepta un pequeño desbordamiento, que el ruido explica', () => {
-            const p = posicionador.estimar(observar({ x: -1, y: 4 }), PLAZA);
-            expect(p).not.toBeNull();
+            const punto = posicionador.estimar(observar({ x: -1, y: 4 }), PLAZA);
+            expect(punto).not.toBeNull();
         });
 
         it('descarta una posición claramente fuera de la plaza', () => {
-            const p = posicionador.estimar(observar({ x: 40, y: 4 }), PLAZA);
-            expect(p).toBeNull();
+            const punto = posicionador.estimar(observar({ x: 40, y: 4 }), PLAZA);
+            expect(punto).toBeNull();
         });
     });
 });

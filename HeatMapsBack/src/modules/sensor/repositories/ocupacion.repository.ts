@@ -142,7 +142,7 @@ export class OcupacionRepository {
     }
 
     /** Última consolidación de cada zona, para el estado actual del dashboard. */
-    async findLatestPerZone(): Promise<OcupacionAgregada[]> {
+    findLatestPerZone(): Promise<OcupacionAgregada[]> {
         return this.repo
             .createQueryBuilder('o')
             .innerJoin(
@@ -169,7 +169,7 @@ export class OcupacionRepository {
      * @param fin    - Final del rango, inclusivo.
      * @param idZona - Acota a una zona; omitido devuelve todas.
      */
-    async findByRange(inicio: Date, fin: Date, idZona?: string | null): Promise<OcupacionAgregada[]> {
+    findByRange(inicio: Date, fin: Date, idZona?: string | null): Promise<OcupacionAgregada[]> {
         const qb = this.repo
             .createQueryBuilder('o')
             .leftJoinAndSelect('o.zona', 'zona')
@@ -235,7 +235,7 @@ export class OcupacionRepository {
     }
 
     /** Serie temporal de una zona (o de todas) desde una fecha dada. */
-    async findSeries(since: Date, idZona?: string): Promise<OcupacionAgregada[]> {
+    findSeries(since: Date, idZona?: string): Promise<OcupacionAgregada[]> {
         const qb = this.repo
             .createQueryBuilder('o')
             .where('o.intervaloInicio >= :since', { since })

@@ -12,6 +12,29 @@ const MAC_HEX_LENGTH = 12;
 const normalize = (mac: string): string => mac.toLowerCase().replace(/[^0-9a-f]/g, '');
 
 /**
+ * Determina si una MAC es administrada localmente, es decir, generada por
+ * el propio dispositivo en lugar de asignada por el fabricante.
+ *
+ * Según IEEE 802 para EUI-48, el segundo bit menos significativo del primer
+ * octeto es el bit U/L: 0 = universal (fabricante), 1 = local (aleatoria).
+ *
+ * Una entrada que no reduzca a 48 bits exactos se rechaza en lugar de
+ * interpretarse: filtrar los dígitos hexadecimales de una cadena arbitraria
+ * deja residuos que parsean sin error y producirían un veredicto inventado.
+ *
+ * @param mac - Dirección en cualquier formato de separadores.
+ * @returns `true` si la dirección parece aleatorizada.
+ */
+const isRandomized = (mac: string): boolean => {
+    const normalized = normalize(mac);
+    if (normalized.length !== MAC_HEX_LENGTH) return false;
+
+    const firstOctet = parseInt(normalized.slice(0, 2), 16);
+    if (Number.isNaN(firstOctet)) return false;
+    return (firstOctet & 0b10) !== 0;
+};
+
+/**
  * Anonimización de direcciones MAC.
  *
  * **Por qué HMAC y no SHA-256 a secas**: el espacio de direcciones MAC es de
@@ -29,6 +52,9 @@ const normalize = (mac: string): string => mac.toLowerCase().replace(/[^0-9a-f]/
  */
 @singleton()
 export class MacAnonymizerService {
+    /** `true` si la dirección parece aleatorizada por el dispositivo. */
+    readonly isRandomized = isRandomized;
+
     constructor(private readonly cfg: SensingConfig) {}
 
     /**
@@ -47,26 +73,4 @@ export class MacAnonymizerService {
             .digest('hex');
     }
 
-    /**
-     * Determina si una MAC es administrada localmente, es decir, generada por
-     * el propio dispositivo en lugar de asignada por el fabricante.
-     *
-     * Según IEEE 802 para EUI-48, el segundo bit menos significativo del primer
-     * octeto es el bit U/L: 0 = universal (fabricante), 1 = local (aleatoria).
-     *
-     * Una entrada que no reduzca a 48 bits exactos se rechaza en lugar de
-     * interpretarse: filtrar los dígitos hexadecimales de una cadena arbitraria
-     * deja residuos que parsean sin error y producirían un veredicto inventado.
-     *
-     * @param mac - Dirección en cualquier formato de separadores.
-     * @returns `true` si la dirección parece aleatorizada.
-     */
-    isRandomized(mac: string): boolean {
-        const normalized = normalize(mac);
-        if (normalized.length !== MAC_HEX_LENGTH) return false;
-
-        const firstOctet = parseInt(normalized.slice(0, 2), 16);
-        if (Number.isNaN(firstOctet)) return false;
-        return (firstOctet & 0b10) !== 0;
-    }
 }
