@@ -188,6 +188,20 @@ export const envSchema = z.object({
 
     /** Origen admitido en las cabeceras CORS. */
     CORS_ORIGIN: z.string().default('*'),
+
+    /*
+     * Saltos de proxy en los que confiar para deducir la IP del cliente.
+     *
+     * `0` (por defecto) es lo correcto en local, sin nada delante. Detrás de un
+     * proxy —Northflank pone uno— hay que subirlo a `1`, o Express toma la IP
+     * del proxy como la del cliente: el limitador de tasa mete a todos los
+     * usuarios en el mismo cubo y las sesiones registran siempre la misma IP.
+     *
+     * No se pone `true` a secas a propósito: eso haría confiar en cualquier
+     * `X-Forwarded-For`, y entonces un cliente podría inventarse la cabecera
+     * para saltarse el límite de peticiones.
+     */
+    TRUST_PROXY: intFromString(0),
 });
 
 /**
