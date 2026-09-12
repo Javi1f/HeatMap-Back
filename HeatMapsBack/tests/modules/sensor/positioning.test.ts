@@ -9,14 +9,21 @@ import {
 const posicionador = container.resolve(PositioningService);
 
 /**
- * Geometría real de la plazoleta del despliegue: 17,64 m × 9,10 m con los tres
- * nodos en tres de sus esquinas.
+ * Geometría real de la plazoleta del despliegue: 17,64 m × 9,10 m.
+ *
+ * Los nodos forman un triángulo isósceles: dos en las esquinas inferiores y el
+ * tercero en el centro del borde superior. A diferencia de montarlos en tres
+ * esquinas, esta disposición es simétrica respecto al eje vertical, así que el
+ * error de posición no favorece a ninguna mitad de la plaza.
  */
 const PLAZA: Limites = { ancho: 17.64, alto: 9.10 };
 
+/** Esquina inferior izquierda, origen de coordenadas. */
 const S1 = { x: 0, y: 0 };
-const S2 = { x: 0, y: 9.10 };
-const S3 = { x: 17.64, y: 9.10 };
+/** Esquina inferior derecha. */
+const S2 = { x: 17.64, y: 0 };
+/** Centro del borde superior. */
+const S3 = { x: 8.82, y: 9.10 };
 
 /** Construye las observaciones exactas de un dispositivo situado en `p`. */
 const observar = (p: { x: number; y: number }, nodos = [S1, S2, S3]): Observacion[] =>
@@ -27,8 +34,8 @@ describe('PositioningService', () => {
         it.each([
             ['centro de la plaza', { x: 8.82, y: 4.55 }],
             ['junto al nodo 1', { x: 1, y: 1 }],
-            ['junto al nodo 3', { x: 16.5, y: 8.5 }],
-            ['esquina sin nodo', { x: 17.64, y: 0 }],
+            ['junto al nodo 3', { x: 8.5, y: 8.5 }],
+            ['esquina sin nodo', { x: 17.64, y: 9.10 }],
             ['borde inferior', { x: 12, y: 0.2 }],
         ])('sitúa el dispositivo en %s', (_caso, esperado) => {
             const punto = posicionador.estimar(observar(esperado), PLAZA);
@@ -61,9 +68,10 @@ describe('PositioningService', () => {
             const punto = posicionador.estimar(observar(real, [S1, S2]), PLAZA);
 
             expect(punto).not.toBeNull();
-            // Sin tercera medida la componente X no se puede recuperar, pero la
-            // altura sí queda determinada por las dos distancias.
-            expect(punto?.y).toBeCloseTo(real.y, 6);
+            // Los dos nodos comparten el borde inferior, así que sin una tercera
+            // medida la altura no se puede recuperar; la componente X sí queda
+            // determinada por las dos distancias.
+            expect(punto?.x).toBeCloseTo(real.x, 6);
         });
 
         it('resuelve aunque las circunferencias no lleguen a cortarse', () => {
@@ -73,7 +81,7 @@ describe('PositioningService', () => {
             ];
             const punto = posicionador.estimar(obs, PLAZA);
             expect(punto).not.toBeNull();
-            expect(punto?.y).toBeCloseTo(4.55, 6);
+            expect(punto?.x).toBeCloseTo(8.82, 6);
         });
     });
 

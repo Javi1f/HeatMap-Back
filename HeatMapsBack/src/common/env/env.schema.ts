@@ -60,6 +60,55 @@ const boolFromString = (defaultValue: boolean) =>
         )
         .default(defaultValue);
 
+/**
+ * Tope de vida de una sesión, en segundos.
+ *
+ * Una hora. El sistema trata datos de presencia de personas, así que una
+ * sesión olvidada abierta en un equipo compartido es el riesgo a acotar, no la
+ * comodidad de no volver a entrar.
+ */
+const SEGUNDOS_MAXIMOS_SESION = 60 * 60;
+
+/** Unidades que admite `jsonwebtoken` en su cadena de expiración. */
+const SEGUNDOS_POR_UNIDAD: Readonly<Record<string, number>> = {
+    s: 1,
+    m: 60,
+    h: 3600,
+    d: 86400,
+};
+
+/**
+ * Convierte una duración tipo `30m`, `2h` o `3600` a segundos.
+ *
+ * @returns Los segundos, o `null` si el texto no se entiende.
+ */
+const aSegundos = (texto: string): number | null => {
+    const limpio = texto.trim().toLowerCase();
+    const coincidencia = /^(\d+)\s*([smhd])?$/.exec(limpio);
+    if (!coincidencia) return null;
+
+    const [, cantidad, unidad] = coincidencia;
+    return Number(cantidad) * (unidad ? SEGUNDOS_POR_UNIDAD[unidad] : 1);
+};
+
+/**
+ * Duración con un tope máximo, comprobado al arrancar.
+ *
+ * Se valida en lugar de recortar en silencio: si el despliegue pide ocho horas
+ * de sesión, es mejor que no arranque y se vea, a que arranque emitiendo algo
+ * distinto de lo que dice su configuración.
+ */
+const duracionAcotada = (porDefecto: string, maximoSegundos: number) =>
+    z
+        .string()
+        .default(porDefecto)
+        .refine((valor) => aSegundos(valor) !== null, {
+            message: 'debe ser una duración como 45m, 1h o 3600',
+        })
+        .refine((valor) => (aSegundos(valor) ?? Infinity) <= maximoSegundos, {
+            message: `no puede pasar de ${maximoSegundos / 60} minutos`,
+        });
+
 /** Esquema Zod que valida y normaliza todas las variables de entorno. */
 export const envSchema = z.object({
     /** Entorno de ejecución. Determina el nivel de log y los mensajes de error. */
@@ -136,8 +185,12 @@ export const envSchema = z.object({
     /** Secreto de firma de los JWT. */
     JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
 
-    /** Validez de los JWT emitidos, en formato de `jsonwebtoken` (ej. `24h`). */
-    JWT_EXPIRES_IN: z.string().default('24h'),
+    /**
+     * Validez de los JWT emitidos, en formato de `jsonwebtoken` (ej. `45m`).
+     *
+     * Acotada a una hora: ver {@link SEGUNDOS_MAXIMOS_SESION}.
+     */
+    JWT_EXPIRES_IN: duracionAcotada('1h', SEGUNDOS_MAXIMOS_SESION),
 
     /** Intentos de código de verificación antes de invalidar el registro. */
     MAX_VERIFICATION_ATTEMPTS: intFromString(3),

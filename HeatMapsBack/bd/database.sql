@@ -257,7 +257,7 @@ INSERT INTO zona (id_zona, nombre, descripcion, capacidad_max, coordenadas, acti
 VALUES (
     @id_zona,
     'Plazoleta central',
-    'Plazoleta rectangular de 17,64 m x 9,10 m con tres nodos de captura en las esquinas.',
+    'Plazoleta rectangular de 17,64 m x 9,10 m con tres nodos de captura: las dos esquinas inferiores y el centro del borde superior.',
     NULL,
     JSON_OBJECT('forma', 'rectangulo', 'ancho', 17.64, 'alto', 9.10),
     TRUE
@@ -269,9 +269,12 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO sensor (id_sensor, nombre, id_zona, estado, pos_x, pos_y)
 VALUES
+    -- Triangulo isosceles: dos esquinas inferiores y el centro del borde
+    -- superior. Es simetrico respecto al eje vertical, asi que el error de
+    -- posicion no favorece a ninguna mitad de la plaza.
     ('rpi-sniffer-001', 'Nodo 1', @id_zona, 'activo',  0.00, 0.00),
-    ('rpi-sniffer-002', 'Nodo 2', @id_zona, 'activo',  0.00, 9.10),
-    ('rpi-sniffer-003', 'Nodo 3', @id_zona, 'activo', 17.64, 9.10)
+    ('rpi-sniffer-002', 'Nodo 2', @id_zona, 'activo', 17.64, 0.00),
+    ('rpi-sniffer-003', 'Nodo 3', @id_zona, 'activo',  8.82, 9.10)
 ON DUPLICATE KEY UPDATE
     nombre  = VALUES(nombre),
     id_zona = VALUES(id_zona),
