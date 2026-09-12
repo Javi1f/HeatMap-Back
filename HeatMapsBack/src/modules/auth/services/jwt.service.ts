@@ -9,7 +9,7 @@ import { UnauthorizedError } from '../../../common/errors';
  *
  * Se lee del propio token en lugar de recalcularlo a partir de
  * `jwtExpiresIn`: así la fila de sesión y el JWT no pueden divergir aunque
- * se cambie el formato de la configuración ("24h", "1d", segundos…).
+ * se cambie el formato de la configuración ("1h", "45m", segundos…).
  *
  * @returns La fecha de expiración, o `null` si el token no declara `exp`.
  */

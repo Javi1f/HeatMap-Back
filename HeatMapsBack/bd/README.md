@@ -36,21 +36,45 @@ solo en local.
 ## El espacio monitorizado
 
 Al final del archivo se da de alta la plazoleta del despliegue: un rectángulo de
-17,64 m × 9,10 m con los nodos en tres de sus esquinas. El origen de coordenadas
-está en la inferior izquierda, con X hacia la derecha e Y hacia arriba, en
-metros.
+17,64 m × 9,10 m con los nodos formando un triángulo isósceles: dos en las
+esquinas inferiores y el tercero en el centro del borde superior. El origen de
+coordenadas está en la inferior izquierda, con X hacia la derecha e Y hacia
+arriba, en metros.
 
 ```
- (0, 9.10) ┌───────────────────────────┐ (17.64, 9.10)
-  nodo 2   │                           │  nodo 3
-           │                           │
-  nodo 1   └───────────────────────────┘
- (0, 0)                                  (17.64, 0)
+                       (8.82, 9.10)
+                          nodo 3
+           ┌──────────────┴──────────────┐
+           │                             │
+           │                             │
+  nodo 1   └─────────────────────────────┘  nodo 2
+ (0, 0)                                    (17.64, 0)
 ```
 
-La esquina inferior derecha queda sin nodo. No impide situar dispositivos: con
-tres circunferencias de radio conocido el punto queda determinado, y la
-precisión solo cae en la franja más alejada de los tres.
+### Por qué esta disposición y no tres esquinas
+
+Montar los tres nodos en tres esquinas deja el triángulo apoyado en una diagonal:
+la geometría es asimétrica y la mitad de la plaza más alejada del tercer nodo
+recibe peor cobertura. El triángulo isósceles cubre el mismo área —ambas
+disposiciones encierran 80,3 m²— pero es simétrico respecto al eje vertical, así
+que el error no favorece a ninguna mitad.
+
+La diferencia se midió simulando 10 000 posiciones repartidas por la plaza con
+ruido gaussiano sobre cada distancia:
+
+| Ruido por distancia | Disposición | Error medio | Error p95 | Sin posición |
+| --- | --- | --- | --- | --- |
+| σ = 0,5 m | tres esquinas | 0,83 m | 1,99 m | 0,4 % |
+| | **triángulo** | **0,67 m** | **1,42 m** | **0,0 %** |
+| σ = 1,5 m | tres esquinas | 2,20 m | 5,06 m | 10,0 % |
+| | **triángulo** | **1,88 m** | **3,89 m** | **5,3 %** |
+| σ = 3,0 m | tres esquinas | 3,52 m | 7,42 m | 29,1 % |
+| | **triángulo** | **3,34 m** | **6,86 m** | **19,5 %** |
+
+El error medio mejora entre un 5 % y un 19 %, pero lo que más cambia es la
+proporción de dispositivos que quedan **sin posición**: casi la mitad. Con RSSI
+sin calibrar el ruido real está más cerca de σ = 3 m que de σ = 0,5 m, así que es
+en esa fila donde se nota en el mapa.
 
 `id_sensor` debe coincidir con el `sensor_id` que cada Raspberry publica en
 Kafka. Los nodos se auto-registran al enviar su primera lectura, así que si ya
