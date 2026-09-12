@@ -157,7 +157,16 @@ export const envSchema = z.object({
     /** Topic del que se consumen las lecturas de los nodos de captura. */
     KAFKA_TOPIC: z.string().min(1),
 
-    /** Grupo de consumidores, que determina el reparto de particiones. */
+    /**
+     * Grupo de consumidores, que determina el reparto de particiones.
+     *
+     * Debe ser exclusivo del backend y el mismo en todas sus instancias. Si
+     * otro cliente comparte el grupo, el tópico de una sola partición sólo lo
+     * lee uno de los dos, y si ese cliente negoció otro asignador —kafka-python
+     * usa `range`, kafkajs `RoundRobinAssigner`— el broker ni siquiera admite
+     * al backend. Instancias del backend con grupos distintos, en cambio,
+     * leerían cada una todos los mensajes y duplicarían las capturas.
+     */
     KAFKA_GROUP_ID: z.string().min(1),
 
     /** Autoridad certificadora del broker, en PEM. */
