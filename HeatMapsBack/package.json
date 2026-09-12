@@ -34,7 +34,7 @@
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -44,8 +44,8 @@
     "express-rate-limit": "^8.5.2",
     "jsonwebtoken": "^9.0.3",
     "kafkajs": "^2.2.4",
-    "mysql2": "^3.11.5",
-    "nodemailer": "^9.0.1",
+    "mysql2": "^3.24.4",
+    "nodemailer": "^9.1.1",
     "reflect-metadata": "^0.2.2",
     "socket.io": "^4.7.5",
     "tsyringe": "^4.10.0",
