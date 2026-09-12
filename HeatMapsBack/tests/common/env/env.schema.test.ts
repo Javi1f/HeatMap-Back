@@ -4,6 +4,14 @@ import { envSchema } from '../../../src/common/env/env.schema';
 const jwtExpiresIn = envSchema.shape.JWT_EXPIRES_IN;
 
 /**
+ * Lo que el esquema recibe cuando la variable no está en el entorno.
+ *
+ * Se nombra en lugar de pasar `undefined` en la llamada porque es el caso bajo
+ * prueba —el despliegue que no configura nada— y no un hueco por rellenar.
+ */
+const SIN_DEFINIR: string | undefined = undefined;
+
+/**
  * La duración de la sesión es una decisión de seguridad, no de comodidad: el
  * sistema maneja datos de presencia, así que una sesión olvidada en un equipo
  * compartido es el riesgo que acota el tope de una hora.
@@ -14,7 +22,7 @@ const jwtExpiresIn = envSchema.shape.JWT_EXPIRES_IN;
  */
 describe('JWT_EXPIRES_IN', () => {
     it('dura una hora si no se configura', () => {
-        expect(jwtExpiresIn.parse(undefined)).toBe('1h');
+        expect(jwtExpiresIn.parse(SIN_DEFINIR)).toBe('1h');
     });
 
     it('admite duraciones de una hora o menos', () => {

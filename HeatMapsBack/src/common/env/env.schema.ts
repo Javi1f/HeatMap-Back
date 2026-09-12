@@ -84,9 +84,11 @@ const SEGUNDOS_POR_UNIDAD: Readonly<Record<string, number>> = {
  */
 const aSegundos = (texto: string): number | null => {
     const limpio = texto.trim().toLowerCase();
-    const m = /^(\d+)\s*([smhd])?$/.exec(limpio);
-    if (!m) return null;
-    return Number(m[1]) * (m[2] ? SEGUNDOS_POR_UNIDAD[m[2]] : 1);
+    const coincidencia = /^(\d+)\s*([smhd])?$/.exec(limpio);
+    if (!coincidencia) return null;
+
+    const [, cantidad, unidad] = coincidencia;
+    return Number(cantidad) * (unidad ? SEGUNDOS_POR_UNIDAD[unidad] : 1);
 };
 
 /**
@@ -100,10 +102,10 @@ const duracionAcotada = (porDefecto: string, maximoSegundos: number) =>
     z
         .string()
         .default(porDefecto)
-        .refine((v) => aSegundos(v) !== null, {
+        .refine((valor) => aSegundos(valor) !== null, {
             message: 'debe ser una duración como 45m, 1h o 3600',
         })
-        .refine((v) => (aSegundos(v) ?? Infinity) <= maximoSegundos, {
+        .refine((valor) => (aSegundos(valor) ?? Infinity) <= maximoSegundos, {
             message: `no puede pasar de ${maximoSegundos / 60} minutos`,
         });
 
