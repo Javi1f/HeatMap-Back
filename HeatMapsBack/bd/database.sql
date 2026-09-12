@@ -269,9 +269,9 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO sensor (id_sensor, nombre, id_zona, estado, pos_x, pos_y)
 VALUES
-    ('raspberry-1', 'Nodo 1', @id_zona, 'activo',  0.00, 0.00),
-    ('raspberry-2', 'Nodo 2', @id_zona, 'activo',  0.00, 9.10),
-    ('raspberry-3', 'Nodo 3', @id_zona, 'activo', 17.64, 9.10)
+    ('rpi-sniffer-001', 'Nodo 1', @id_zona, 'activo',  0.00, 0.00),
+    ('rpi-sniffer-002', 'Nodo 2', @id_zona, 'activo',  0.00, 9.10),
+    ('rpi-sniffer-003', 'Nodo 3', @id_zona, 'activo', 17.64, 9.10)
 ON DUPLICATE KEY UPDATE
     nombre  = VALUES(nombre),
     id_zona = VALUES(id_zona),

@@ -79,6 +79,18 @@ export interface MapaPublico {
     /** Dispositivos situados en el plano. */
     situados: number;
 
+    /**
+     * Dispositivos detectados que no se pudieron situar.
+     *
+     * Situar uno exige que al menos dos nodos lo vean a la vez, para cruzar
+     * sus distancias. Con un solo nodo emitiendo, todas las detecciones caen
+     * aquí: hay gente, pero no se sabe dónde. Se publica para que la página
+     * pueda decirlo en lugar de anunciar que no hay nadie, que es distinto.
+     *
+     * Es un conteo agregado y no identifica a nadie.
+     */
+    sinPosicion: number;
+
     /** Nodos con su posición. */
     nodos: NodoPublico[];
 
@@ -116,6 +128,7 @@ const despojar = (mapa: MapaDeCalor): MapaPublico => {
         rejilla: mapa.rejilla,
         maximo: mapa.maximo,
         situados: mapa.situados,
+        sinPosicion: mapa.sinPosicion,
         nodos: mapa.nodos.map((n) => ({
             nombre: n.nombre,
             x: n.x,
