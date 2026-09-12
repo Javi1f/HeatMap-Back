@@ -1,5 +1,5 @@
 import { singleton } from 'tsyringe';
-import { Consumer, EachMessagePayload, Kafka } from 'kafkajs';
+import { Consumer, ConsumerCrashEvent, ConsumerGroupJoinEvent, EachMessagePayload, Kafka } from 'kafkajs';
 import { KafkaConfig } from '../../../config/kafka.config';
 import { SensorPayloadCipher } from '../../../crypto/sensor-payload.crypto';
 import { LoggerService } from '../../../common/logger/logger.service';
@@ -31,6 +31,31 @@ const normalizeSensorPayload = (
     received_at: new Date().toISOString(),
 });
 
+/** Primera espera antes de reintentar tras una caída del consumer, en milisegundos. */
+const ESPERA_INICIAL_MS = 5_000;
+
+/** Tope de la espera entre reintentos, en milisegundos. */
+const ESPERA_MAXIMA_MS = 60_000;
+
+/** Tipo de error de Kafka cuando los miembros de un grupo no comparten asignador. */
+const PROTOCOLO_INCOMPATIBLE = 'INCONSISTENT_GROUP_PROTOCOL';
+
+/** Error de kafkajs con los campos opcionales que usa para encadenar causas. */
+type ErrorKafka = Error & { cause?: Error; type?: string };
+
+/**
+ * Error que originó una caída.
+ *
+ * kafkajs envuelve el error del protocolo en varias capas, y el tipo que
+ * explica la caída —como `INCONSISTENT_GROUP_PROTOCOL`— sólo está en la más
+ * interna.
+ */
+const causaOriginal = (error: Error): ErrorKafka => {
+    let actual: ErrorKafka = error;
+    while (actual.cause) actual = actual.cause;
+    return actual;
+};
+
 /**
  * Consumidor del topic de Kafka donde los sensores publican lecturas WiFi.
  *
@@ -49,6 +74,12 @@ const normalizeSensorPayload = (
  * una petición. Con alcance transitorio, el controlador que responde a
  * `/kafka/status` consultaría una instancia distinta de la que consume, e
  * informaría siempre de que está detenida.
+ *
+ * **Caídas**: kafkajs sólo se reinicia solo ante errores recuperables. Ante uno
+ * que no lo es —el broker rechaza al consumer porque otro cliente del grupo
+ * negoció un asignador distinto— se desconecta y no vuelve a intentarlo, y el
+ * servidor HTTP sigue respondiendo como si nada. Por eso el servicio escucha
+ * la caída, la registra con su causa y reintenta con espera creciente.
  */
 @singleton()
 export class KafkaConsumerService {
@@ -60,6 +91,12 @@ export class KafkaConsumerService {
 
     /** Estado interno que hace idempotentes a `start` y `stop`. */
     private isRunning = false;
+
+    /** Temporizador del próximo reintento, o `null` si no hay ninguno pendiente. */
+    private reintento: ReturnType<typeof setTimeout> | null = null;
+
+    /** Espera del próximo reintento; se duplica con cada fallo seguido. */
+    private esperaMs = ESPERA_INICIAL_MS;
 
     /** Identificador del cliente ante el broker, visible en sus metricas. */
     private static readonly CLIENT_ID = 'sensor-consumer';
@@ -94,12 +131,20 @@ export class KafkaConsumerService {
             ssl: this.cfg.ssl,
         });
 
-        this.consumer = this.kafka.consumer({ groupId: this.cfg.groupId });
-        await this.consumer.connect();
-        await this.consumer.subscribe({ topic: this.cfg.topic, fromBeginning: false });
-        await this.consumer.run({
+        const consumer = this.kafka.consumer({ groupId: this.cfg.groupId });
+        this.consumer = consumer;
+        consumer.on(consumer.events.GROUP_JOIN, (evento) => this.alUnirseAlGrupo(evento));
+        consumer.on(consumer.events.CRASH, (evento) => this.alCaer(consumer, evento));
+        await consumer.connect();
+        await consumer.subscribe({ topic: this.cfg.topic, fromBeginning: false });
+        await consumer.run({
             eachMessage: (payload: EachMessagePayload) => this.handleMessage(payload),
         });
+
+        // La primera unión al grupo ocurre dentro de `run`. Si fracasó sin
+        // remedio, `alCaer` ya descartó este consumer y programó el reintento:
+        // marcarlo ahora como activo taparía la caída y bloquearía el reintento.
+        if (this.consumer !== consumer) return;
 
         this.isRunning = true;
         this.logger.info(MESSAGES.CONSUMER.STARTED);
@@ -109,6 +154,10 @@ export class KafkaConsumerService {
      * Detiene el consumidor. Idempotente.
      */
     async stop(): Promise<void> {
+        if (this.reintento) {
+            clearTimeout(this.reintento);
+            this.reintento = null;
+        }
         if (!this.isRunning || !this.consumer) {
             this.logger.warn(MESSAGES.CONSUMER.NOT_RUNNING);
             return;
@@ -117,6 +166,72 @@ export class KafkaConsumerService {
         this.consumer = null;
         this.isRunning = false;
         this.logger.info(MESSAGES.CONSUMER.STOPPED);
+    }
+
+    /**
+     * Registra a qué particiones quedó asignado el consumer.
+     *
+     * Unirse sin particiones no es un error: significa que otra instancia del
+     * mismo grupo las está leyendo. Se avisa porque, visto desde fuera, es
+     * indistinguible de un backend que no recibe nada.
+     */
+    private alUnirseAlGrupo({ payload }: ConsumerGroupJoinEvent): void {
+        this.esperaMs = ESPERA_INICIAL_MS;
+        const particiones = payload.memberAssignment[this.cfg.topic] ?? [];
+
+        if (particiones.length === 0) {
+            this.logger.warn(`${MESSAGES.CONSUMER.NO_PARTITIONS} (${payload.groupId})`);
+            return;
+        }
+        this.logger.info(
+            `${MESSAGES.CONSUMER.GROUP_JOINED} ${payload.groupId}, particiones [${particiones.join(', ')}]`,
+        );
+    }
+
+    /**
+     * Registra una caída y, si kafkajs no va a reiniciarse solo, programa el
+     * reintento.
+     *
+     * Se ignoran las caídas de un consumer que ya no es el vigente: sin esa
+     * comprobación, un evento tardío de un intento anterior descartaría al
+     * consumer que sí funciona.
+     */
+    private alCaer(consumer: Consumer, { payload }: ConsumerCrashEvent): void {
+        if (consumer !== this.consumer) return;
+
+        const causa = causaOriginal(payload.error);
+        const pista = causa.type === PROTOCOLO_INCOMPATIBLE ? ` ${MESSAGES.CONSUMER.INCOMPATIBLE_GROUP}` : '';
+        this.logger.error(`${MESSAGES.CONSUMER.CRASHED} (${payload.groupId}): ${causa.message}.${pista}`);
+
+        if (payload.restart) return;
+
+        this.isRunning = false;
+        this.consumer = null;
+        this.programarReintento();
+    }
+
+    /**
+     * Vuelve a iniciar el consumer tras una espera que se duplica con cada
+     * fallo seguido, hasta {@link ESPERA_MAXIMA_MS}.
+     *
+     * La espera creciente evita martillear al broker cuando la causa es
+     * persistente, como un grupo compartido con un cliente incompatible, sin
+     * renunciar a recuperarse sola cuando la causa desaparece.
+     */
+    private programarReintento(): void {
+        if (this.reintento) return;
+
+        const espera = this.esperaMs;
+        this.esperaMs = Math.min(this.esperaMs * 2, ESPERA_MAXIMA_MS);
+        this.logger.warn(`${MESSAGES.CONSUMER.RESTARTING} ${Math.round(espera / 1000)} s`);
+
+        this.reintento = setTimeout(() => {
+            this.reintento = null;
+            this.start().catch((err: unknown) => {
+                this.logger.error(MESSAGES.CONSUMER.START_ERROR, err);
+                this.programarReintento();
+            });
+        }, espera);
     }
 
     /**

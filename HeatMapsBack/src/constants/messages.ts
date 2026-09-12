@@ -12,6 +12,14 @@ export const MESSAGES = {
         STOPPED: 'Consumer detenido correctamente',
         START_ERROR: 'Error al iniciar consumer',
         STOP_ERROR: 'Error al detener consumer',
+        CRASHED: 'El consumer de Kafka se detuvo',
+        RESTARTING: 'Reintentando iniciar el consumer en',
+        GROUP_JOINED: 'Consumer unido al grupo',
+        NO_PARTITIONS:
+            'Consumer unido al grupo sin particiones: otra instancia del mismo grupo las está leyendo',
+        INCOMPATIBLE_GROUP:
+            'Otro cliente del grupo usa un asignador de particiones distinto (por ejemplo kafka-python con "range") '
+            + 'y el broker no admite a este consumer. Configura un KAFKA_GROUP_ID exclusivo para el backend.',
     },
     SERVER: {
         STARTED: 'Servidor iniciado en puerto',
