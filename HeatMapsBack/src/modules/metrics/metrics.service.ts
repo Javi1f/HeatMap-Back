@@ -7,6 +7,8 @@ import { CapturaRepository } from '../sensor/repositories/captura.repository';
 import { OcupacionRepository } from '../sensor/repositories/ocupacion.repository';
 import { SensorRepository } from '../sensor/repositories/sensor.repository';
 import { ZonaRepository } from '../sensor/repositories/zona.repository';
+import { resumirPresentes } from '../sensor/services/presencia';
+import { PresenciaService } from '../sensor/services/presencia.service';
 import {
     MetricsOverview,
     OccupancyPoint,
@@ -37,6 +39,7 @@ const MAX_SERIES_HOURS = 168;
 export class MetricsService {
     constructor(
         private readonly capturas: CapturaRepository,
+        private readonly presencia: PresenciaService,
         private readonly ocupacion: OcupacionRepository,
         private readonly sensores: SensorRepository,
         private readonly zonas: ZonaRepository,
@@ -46,12 +49,17 @@ export class MetricsService {
 
     /**
      * Tarjetas de cabecera: estado inmediato del sistema.
+     *
+     * Las cifras de dispositivos cuentan sólo a los presentes en alguna zona;
+     * `detecciones` sigue contando todas las tramas, porque mide el trabajo de
+     * la red de nodos y no la ocupación.
      */
     async overview(): Promise<MetricsOverview> {
         const since = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60_000);
 
-        const [stats, zonas, sensores, alertasAbiertas] = await Promise.all([
-            this.capturas.statsSince(since),
+        const [evaluaciones, detecciones, zonas, sensores, alertasAbiertas] = await Promise.all([
+            this.presencia.evaluar(since, new Date()),
+            this.capturas.deteccionesDesde(since),
             this.zonas.findActive(),
             this.sensores.findAll(),
             this.alertas.countUnresolved(),
@@ -62,11 +70,16 @@ export class MetricsService {
             (s) => s.ultimaConexion !== null && s.ultimaConexion.getTime() >= onlineThreshold,
         ).length;
 
+        const presentes = resumirPresentes(...[...evaluaciones.values()].map((e) => e.presentes));
+
         return {
-            dispositivosAhora: stats.dispositivosUnicos,
-            detecciones: stats.detecciones,
-            porcentajeRandomizadas: stats.porcentajeRandomizadas,
-            rssiPromedio: stats.rssiPromedio,
+            dispositivosAhora: presentes.dispositivos,
+            detecciones,
+            porcentajeRandomizadas:
+                presentes.dispositivos === 0
+                    ? 0
+                    : Math.round((presentes.aleatorias / presentes.dispositivos) * 1000) / 10,
+            rssiPromedio: presentes.rssiMedio === null ? null : Math.round(presentes.rssiMedio * 10) / 10,
             zonasActivas: zonas.length,
             sensoresTotal: sensores.length,
             sensoresEnLinea,

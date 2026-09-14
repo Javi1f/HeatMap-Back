@@ -10,6 +10,8 @@ import {
     OcupacionRepository,
 } from '../repositories/ocupacion.repository';
 import { ZonaRepository } from '../repositories/zona.repository';
+import { resumirPresentes } from './presencia';
+import { PresenciaService } from './presencia.service';
 
 /**
  * Umbrales absolutos para zonas sin aforo declarado.
@@ -25,8 +27,12 @@ const UMBRAL_ABSOLUTO_ALTA = 60;
  * Consolida periódicamente las detecciones crudas en ocupación por zona y
  * levanta alertas cuando una zona entra en nivel alto.
  *
+ * **Qué se cuenta**: sólo los dispositivos presentes según
+ * {@link PresenciaService}, el mismo criterio que usa el mapa de calor. Los
+ * puntos de acceso y lo que llega de otros pisos no suben el nivel de ocupación.
+ *
  * **Por qué en ventanas cerradas y no en cada mensaje**: el conteo de una zona
- * es un `COUNT(DISTINCT macHash)` sobre todas las detecciones del intervalo.
+ * recorre todas las detecciones del intervalo.
  * Recalcularlo con cada lectura entrante sería cuadrático en el número de
  * mensajes; hacerlo una vez por ventana lo deja en una consulta por intervalo.
  *
@@ -46,6 +52,7 @@ export class OccupancyAggregatorService {
 
     constructor(
         private readonly ocupacion: OcupacionRepository,
+        private readonly presencia: PresenciaService,
         private readonly alertas: AlertaRepository,
         private readonly zonas: ZonaRepository,
         private readonly cfg: SensingConfig,
@@ -102,7 +109,16 @@ export class OccupancyAggregatorService {
             return;
         }
 
-        const conteos = await this.ocupacion.aggregateWindow(start, end);
+        const evaluaciones = await this.presencia.evaluar(start, end);
+        const conteos: ConteoZona[] = [...evaluaciones].map(([idZona, { presentes }]) => {
+            const resumen = resumirPresentes(presentes);
+            return {
+                idZona,
+                dispositivosUnicos: resumen.dispositivos,
+                dispositivosEstables: resumen.estables,
+                rssiPromedio: resumen.rssiMedio,
+            };
+        });
         if (conteos.length === 0) {
             this.logger.debug(`Sin detecciones en la ventana ${start.toISOString()}`);
             return;

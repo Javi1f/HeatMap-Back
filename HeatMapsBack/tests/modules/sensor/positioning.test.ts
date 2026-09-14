@@ -9,21 +9,21 @@ import {
 const posicionador = container.resolve(PositioningService);
 
 /**
- * Geometría real de la plazoleta del despliegue: 17,64 m × 9,10 m.
+ * Geometría real de la plazoleta del despliegue: 21 m × 11,84 m.
  *
  * Los nodos forman un triángulo isósceles: dos en las esquinas inferiores y el
  * tercero en el centro del borde superior. A diferencia de montarlos en tres
  * esquinas, esta disposición es simétrica respecto al eje vertical, así que el
  * error de posición no favorece a ninguna mitad de la plaza.
  */
-const PLAZA: Limites = { ancho: 17.64, alto: 9.10 };
+const PLAZA: Limites = { ancho: 21, alto: 11.84 };
 
 /** Esquina inferior izquierda, origen de coordenadas. */
 const S1 = { x: 0, y: 0 };
 /** Esquina inferior derecha. */
-const S2 = { x: 17.64, y: 0 };
+const S2 = { x: 21, y: 0 };
 /** Centro del borde superior. */
-const S3 = { x: 8.82, y: 9.10 };
+const S3 = { x: 10.5, y: 11.84 };
 
 /** Construye las observaciones exactas de un dispositivo situado en `p`. */
 const observar = (p: { x: number; y: number }, nodos = [S1, S2, S3]): Observacion[] =>
@@ -32,10 +32,10 @@ const observar = (p: { x: number; y: number }, nodos = [S1, S2, S3]): Observacio
 describe('PositioningService', () => {
     describe('con tres nodos y distancias exactas', () => {
         it.each([
-            ['centro de la plaza', { x: 8.82, y: 4.55 }],
+            ['centro de la plaza', { x: 10.5, y: 5.92 }],
             ['junto al nodo 1', { x: 1, y: 1 }],
-            ['junto al nodo 3', { x: 8.5, y: 8.5 }],
-            ['esquina sin nodo', { x: 17.64, y: 9.10 }],
+            ['junto al nodo 3', { x: 10.2, y: 11.2 }],
+            ['esquina sin nodo', { x: 21, y: 11.84 }],
             ['borde inferior', { x: 12, y: 0.2 }],
         ])('sitúa el dispositivo en %s', (_caso, esperado) => {
             const punto = posicionador.estimar(observar(esperado), PLAZA);
@@ -52,7 +52,7 @@ describe('PositioningService', () => {
          * el mapa no serviría ni para ver concentraciones.
          */
         it('mantiene el error acotado cuando las distancias se desvían', () => {
-            const real = { x: 8.82, y: 4.55 };
+            const real = { x: 10.5, y: 5.92 };
             const ruido = [0.5, -0.4, 0.3];
             const obs = observar(real).map((o, i) => ({ ...o, d: o.d + ruido[i] }));
 
@@ -81,7 +81,7 @@ describe('PositioningService', () => {
             ];
             const punto = posicionador.estimar(obs, PLAZA);
             expect(punto).not.toBeNull();
-            expect(punto?.x).toBeCloseTo(8.82, 6);
+            expect(punto?.x).toBeCloseTo(10.5, 6);
         });
     });
 

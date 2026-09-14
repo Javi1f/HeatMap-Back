@@ -5,6 +5,8 @@ import { CapturaInsert, CapturaRepository } from '../repositories/captura.reposi
 import { SensorRepository } from '../repositories/sensor.repository';
 import { ZonaRepository } from '../repositories/zona.repository';
 import { DistanceEstimatorService } from './distance-estimator.service';
+import { PresenciaService } from './presencia.service';
+import { detectarInfraestructura } from './presencia';
 import { MacAnonymizerService } from './mac-anonymizer.service';
 
 /** Canal Wi-Fi por defecto cuando el sensor no lo reporta. */
@@ -42,11 +44,16 @@ export class DataProcessorService {
         private readonly zonas: ZonaRepository,
         private readonly anonymizer: MacAnonymizerService,
         private readonly distance: DistanceEstimatorService,
+        private readonly presencia: PresenciaService,
         private readonly logger: LoggerService,
     ) {}
 
     /**
      * Procesa y persiste un payload ya descifrado y normalizado.
+     *
+     * Aquí se detecta también la infraestructura: es el único punto por el que
+     * pasa la MAC en claro, y sin ella no se ve que varios BSSID son del mismo
+     * punto de acceso.
      *
      * La marca de aleatorización se recalcula a partir del bit U/L en lugar de
      * copiar la que envía el nodo: el estándar IEEE 802 es la fuente normativa
@@ -81,6 +88,12 @@ export class DataProcessorService {
 
         const inserted = await this.capturas.insertMany(rows);
         this.logger.debug(`Persistidas ${inserted} detecciones de sensor=${data.sensor_id}`);
+
+        const infraestructura = detectarInfraestructura(data.devices);
+        await this.presencia.anotarInfraestructura(
+            [...infraestructura].map(([mac, motivo]) => ({ macHash: this.anonymizer.hash(mac), motivo })),
+            seenAt,
+        );
     }
 
     /**

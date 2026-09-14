@@ -34,6 +34,16 @@ export class SensingConfig {
         return this.env.get('PATH_LOSS_EXPONENT');
     }
 
+    /** Señal mínima en el nodo que peor oye a un dispositivo para contarlo presente, en dBm. */
+    get presenciaRssiMinimoDbm(): number {
+        return this.env.get('PRESENCIA_RSSI_MINIMO_DBM');
+    }
+
+    /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
+    get infraestructuraVigenciaHoras(): number {
+        return this.env.get('INFRAESTRUCTURA_VIGENCIA_HORAS');
+    }
+
     /** Duración de la ventana de agregación de ocupación, en minutos. */
     get aggregationIntervalMinutes(): number {
         return this.env.get('AGGREGATION_INTERVAL_MINUTES');

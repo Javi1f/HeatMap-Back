@@ -177,6 +177,24 @@ CREATE TABLE IF NOT EXISTS captura (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
+-- Dispositivos que no cuentan como ocupantes: puntos de acceso, equipos pegados
+-- a un nodo y exclusiones manuales. Se clasifican al ingerir, que es el unico
+-- momento en que se ve la MAC en claro. Nunca guarda la MAC, solo su HMAC.
+CREATE TABLE IF NOT EXISTS dispositivo_infraestructura (
+    mac_hash           CHAR(64)     NOT NULL,
+
+    motivo             ENUM('punto-de-acceso', 'junto-a-nodo', 'manual') NOT NULL,
+
+    primera_deteccion  DATETIME     NOT NULL,
+    ultima_deteccion   DATETIME     NOT NULL,
+
+    CONSTRAINT pk_dispositivo_infraestructura PRIMARY KEY (mac_hash),
+
+    INDEX idx_dispositivo_infraestructura_ultima (ultima_deteccion)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS ocupacion_agregada (
     id_ocupacion          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     id_zona               CHAR(36)     NOT NULL,
@@ -257,9 +275,10 @@ INSERT INTO zona (id_zona, nombre, descripcion, capacidad_max, coordenadas, acti
 VALUES (
     @id_zona,
     'Plazoleta central',
-    'Plazoleta rectangular de 17,64 m x 9,10 m con tres nodos de captura: las dos esquinas inferiores y el centro del borde superior.',
+    'Plazoleta rectangular de 21 m x 11,84 m con tres nodos de captura: las dos esquinas inferiores y el centro del borde superior.',
     NULL,
-    JSON_OBJECT('forma', 'rectangulo', 'ancho', 17.64, 'alto', 9.10),
+    -- ajusteVerticalM corrige el sesgo hacia el lado de los nodos 1 y 2; ver bd/README.md.
+    JSON_OBJECT('forma', 'rectangulo', 'ancho', 21.00, 'alto', 11.84, 'ajusteVerticalM', 2.5),
     TRUE
 )
 ON DUPLICATE KEY UPDATE
@@ -273,8 +292,8 @@ VALUES
     -- superior. Es simetrico respecto al eje vertical, asi que el error de
     -- posicion no favorece a ninguna mitad de la plaza.
     ('rpi-sniffer-001', 'Nodo 1', @id_zona, 'activo',  0.00, 0.00),
-    ('rpi-sniffer-002', 'Nodo 2', @id_zona, 'activo', 17.64, 0.00),
-    ('rpi-sniffer-003', 'Nodo 3', @id_zona, 'activo',  8.82, 9.10)
+    ('rpi-sniffer-002', 'Nodo 2', @id_zona, 'activo', 21.00, 0.00),
+    ('rpi-sniffer-003', 'Nodo 3', @id_zona, 'activo', 10.50, 11.84)
 ON DUPLICATE KEY UPDATE
     nombre  = VALUES(nombre),
     id_zona = VALUES(id_zona),

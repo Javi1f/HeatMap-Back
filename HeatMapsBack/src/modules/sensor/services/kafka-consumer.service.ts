@@ -37,6 +37,9 @@ const ESPERA_INICIAL_MS = 5_000;
 /** Tope de la espera entre reintentos, en milisegundos. */
 const ESPERA_MAXIMA_MS = 60_000;
 
+/** Intervalo mínimo entre dos avisos de mensajes descartados por antiguos, en milisegundos. */
+const AVISO_DESCARTES_MS = 60_000;
+
 /** Tipo de error de Kafka cuando los miembros de un grupo no comparten asignador. */
 const PROTOCOLO_INCOMPATIBLE = 'INCONSISTENT_GROUP_PROTOCOL';
 
@@ -97,6 +100,9 @@ export class KafkaConsumerService {
 
     /** Espera del próximo reintento; se duplica con cada fallo seguido. */
     private esperaMs = ESPERA_INICIAL_MS;
+
+    /** Descartes por antigüedad acumulados desde el último aviso. */
+    private descartes = { cantidad: 0, mayorEdadS: 0, ultimoAviso: 0 };
 
     /** Identificador del cliente ante el broker, visible en sus metricas. */
     private static readonly CLIENT_ID = 'sensor-consumer';
@@ -262,16 +268,30 @@ export class KafkaConsumerService {
     }
 
     /**
+     * Indica si el mensaje es más antiguo que el umbral configurado.
+     *
+     * Descartar lo antiguo es correcto al arrancar, cuando el grupo arrastra
+     * lecturas viejas. Pero si el consumer no da abasto, cada mensaje llega ya
+     * caducado, se descartan todos y no se guarda nada mientras el proceso
+     * parece sano. Por eso se avisa, agrupado para no inundar el registro.
+     *
      * @returns true si el mensaje es más antiguo que el umbral configurado.
      */
     private isStale(data: SensorPayload): boolean {
         const age = Date.now() / 1000 - data.timestamp;
-        if (age > this.cfg.maxMessageAgeSeconds) {
-            this.logger.debug(
-                `Mensaje histórico descartado (${Math.round(age)}s) sensor=${data.sensor_id}`,
+        if (age <= this.cfg.maxMessageAgeSeconds) return false;
+
+        this.descartes.cantidad++;
+        this.descartes.mayorEdadS = Math.max(this.descartes.mayorEdadS, age);
+
+        const ahora = Date.now();
+        if (ahora - this.descartes.ultimoAviso >= AVISO_DESCARTES_MS) {
+            this.logger.warn(
+                `${this.descartes.cantidad} ${MESSAGES.KAFKA.STALE_DISCARDED} `
+                + `(límite ${this.cfg.maxMessageAgeSeconds} s, el más antiguo ${Math.round(this.descartes.mayorEdadS)} s)`,
             );
-            return true;
+            this.descartes = { cantidad: 0, mayorEdadS: 0, ultimoAviso: ahora };
         }
-        return false;
+        return true;
     }
 }
