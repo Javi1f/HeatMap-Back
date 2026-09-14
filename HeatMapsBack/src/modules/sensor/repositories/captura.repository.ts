@@ -3,6 +3,7 @@ import { Repository } from 'typeorm';
 import { Captura } from '../../../models/Captura.entity';
 import { Sensor } from '../../../models/Sensor.entity';
 import { DatabaseConfig } from '../../../config/database.config';
+import type { SenalPorNodo } from '../services/presencia';
 
 /**
  * Fila lista para insertar en `captura`.
@@ -62,18 +63,10 @@ export interface DistanciaPorNodo {
     distancia: number;
 }
 
-/** Estadísticas de detecciones en una ventana reciente. */
-export interface CapturaStats {
-    /** MAC distintas vistas en la ventana. */
-    dispositivosUnicos: number;
-    /** Filas totales insertadas (una por dispositivo y lectura). */
-    detecciones: number;
-    /** Cuántas de las MAC distintas eran administradas localmente. */
-    dispositivosRandomizados: number;
-    /** `dispositivosRandomizados` sobre `dispositivosUnicos`, en porcentaje. */
-    porcentajeRandomizadas: number;
-    /** RSSI medio en dBm, o `null` si no hubo detecciones. */
-    rssiPromedio: number | null;
+/** Señal media de un dispositivo en un nodo, con la zona del nodo. */
+export interface SenalEnZona extends SenalPorNodo {
+    /** Zona a la que pertenece el nodo. */
+    idZona: string;
 }
 
 /**
@@ -153,43 +146,57 @@ export class CapturaRepository {
     }
 
     /**
-     * Estadísticas de las detecciones recientes, para las tarjetas de estado
-     * inmediato del dashboard.
+     * Señal media de cada dispositivo en cada nodo dentro de una ventana, que es
+     * lo que necesita el criterio de presencia.
      *
-     * Se consulta sobre `captura` y no sobre la tabla agregada a propósito:
-     * estos números describen «ahora mismo», y la ventana agregada más reciente
-     * puede tener varios minutos de antigüedad.
+     * Promedia el RSSI por pareja dispositivo-nodo por el mismo motivo que
+     * {@link distanciasPorNodo}: una trama aislada fluctúa varios dB sin que
+     * nadie se mueva.
+     *
+     * @param desde  - Inicio de la ventana, inclusivo.
+     * @param hasta  - Fin de la ventana, exclusivo.
+     * @param idZona - Limita la consulta a una zona; sin ella, todas.
+     */
+    async senalesPorNodo(desde: Date, hasta: Date, idZona?: string): Promise<SenalEnZona[]> {
+        const consulta = this.repo
+            .createQueryBuilder('c')
+            .innerJoin(Sensor, 's', 's.idSensor = c.idSensor')
+            .select('s.idZona', 'idZona')
+            .addSelect('c.macHash', 'macHash')
+            .addSelect('c.idSensor', 'idSensor')
+            .addSelect('AVG(c.rssi)', 'rssi')
+            .addSelect('MAX(c.esMacRandom)', 'esMacRandom')
+            .where('c.timestampCaptura >= :desde AND c.timestampCaptura < :hasta', { desde, hasta });
+
+        if (idZona) consulta.andWhere('s.idZona = :idZona', { idZona });
+
+        const filas = await consulta
+            .groupBy('s.idZona')
+            .addGroupBy('c.macHash')
+            .addGroupBy('c.idSensor')
+            .getRawMany<{ idZona: string; macHash: string; idSensor: string; rssi: string; esMacRandom: string | number }>();
+
+        return filas.map((f) => ({
+            idZona: f.idZona,
+            macHash: f.macHash,
+            idSensor: f.idSensor,
+            rssi: Number(f.rssi),
+            esMacRandom: Number(f.esMacRandom) === 1,
+        }));
+    }
+
+    /**
+     * Tramas capturadas desde un momento, sin filtrar.
+     *
+     * Mide el trabajo de la red de nodos, no la ocupación: por eso cuenta
+     * también lo que el criterio de presencia descarta.
      *
      * @param since - Momento a partir del cual contar.
      */
-    async statsSince(since: Date): Promise<CapturaStats> {
-        const row = await this.repo
+    async deteccionesDesde(since: Date): Promise<number> {
+        return this.repo
             .createQueryBuilder('c')
-            .select('COUNT(DISTINCT c.macHash)', 'dispositivosUnicos')
-            .addSelect('COUNT(*)', 'detecciones')
-            .addSelect(
-                'COUNT(DISTINCT CASE WHEN c.esMacRandom = 1 THEN c.macHash END)',
-                'dispositivosRandomizados',
-            )
-            .addSelect('AVG(c.rssi)', 'rssiPromedio')
             .where('c.timestampCaptura >= :since', { since })
-            .getRawOne<{
-                dispositivosUnicos: string;
-                detecciones: string;
-                dispositivosRandomizados: string;
-                rssiPromedio: string | null;
-            }>();
-
-        const unicos = Number(row?.dispositivosUnicos ?? 0);
-        const randomizados = Number(row?.dispositivosRandomizados ?? 0);
-
-        return {
-            dispositivosUnicos: unicos,
-            detecciones: Number(row?.detecciones ?? 0),
-            dispositivosRandomizados: randomizados,
-            porcentajeRandomizadas: unicos === 0 ? 0 : Math.round((randomizados / unicos) * 1000) / 10,
-            rssiPromedio:
-                row?.rssiPromedio == null ? null : Math.round(Number(row.rssiPromedio) * 10) / 10,
-        };
+            .getCount();
     }
 }

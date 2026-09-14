@@ -36,19 +36,19 @@ solo en local.
 ## El espacio monitorizado
 
 Al final del archivo se da de alta la plazoleta del despliegue: un rectángulo de
-17,64 m × 9,10 m con los nodos formando un triángulo isósceles: dos en las
-esquinas inferiores y el tercero en el centro del borde superior. El origen de
-coordenadas está en la inferior izquierda, con X hacia la derecha e Y hacia
+21 m × 11,84 m con los nodos formando un triángulo isósceles: dos en las
+esquinas de un lado largo y el tercero en el centro del lado opuesto. El origen
+de coordenadas está en la esquina del nodo 1, con X hacia la derecha e Y hacia
 arriba, en metros.
 
 ```
-                       (8.82, 9.10)
+                       (10.5, 11.84)
                           nodo 3
            ┌──────────────┴──────────────┐
-           │                             │
+           │                             │  11,84 m
            │                             │
   nodo 1   └─────────────────────────────┘  nodo 2
- (0, 0)                                    (17.64, 0)
+ (0, 0)                21 m                (21, 0)
 ```
 
 ### Por qué esta disposición y no tres esquinas
@@ -56,7 +56,7 @@ arriba, en metros.
 Montar los tres nodos en tres esquinas deja el triángulo apoyado en una diagonal:
 la geometría es asimétrica y la mitad de la plaza más alejada del tercer nodo
 recibe peor cobertura. El triángulo isósceles cubre el mismo área —ambas
-disposiciones encierran 80,3 m²— pero es simétrico respecto al eje vertical, así
+disposiciones encierran 124,3 m²— pero es simétrico respecto al eje vertical, así
 que el error no favorece a ninguna mitad.
 
 La diferencia se midió simulando 10 000 posiciones repartidas por la plaza con
@@ -64,17 +64,99 @@ ruido gaussiano sobre cada distancia:
 
 | Ruido por distancia | Disposición | Error medio | Error p95 | Sin posición |
 | --- | --- | --- | --- | --- |
-| σ = 0,5 m | tres esquinas | 0,83 m | 1,99 m | 0,4 % |
-| | **triángulo** | **0,67 m** | **1,42 m** | **0,0 %** |
-| σ = 1,5 m | tres esquinas | 2,20 m | 5,06 m | 10,0 % |
-| | **triángulo** | **1,88 m** | **3,89 m** | **5,3 %** |
-| σ = 3,0 m | tres esquinas | 3,52 m | 7,42 m | 29,1 % |
-| | **triángulo** | **3,34 m** | **6,86 m** | **19,5 %** |
+| σ = 0,5 m | tres esquinas | 0,80 m | 1,88 m | 0,3 % |
+| | **triángulo** | **0,65 m** | **1,37 m** | **0,0 %** |
+| σ = 1,5 m | tres esquinas | 2,19 m | 5,02 m | 7,5 % |
+| | **triángulo** | **1,87 m** | **3,87 m** | **4,1 %** |
+| σ = 3,0 m | tres esquinas | 3,77 m | 8,17 m | 22,9 % |
+| | **triángulo** | **3,41 m** | **6,95 m** | **15,7 %** |
 
-El error medio mejora entre un 5 % y un 19 %, pero lo que más cambia es la
-proporción de dispositivos que quedan **sin posición**: casi la mitad. Con RSSI
-sin calibrar el ruido real está más cerca de σ = 3 m que de σ = 0,5 m, así que es
-en esa fila donde se nota en el mapa.
+El error medio mejora entre un 10 % y un 19 %, pero lo que más cambia es la
+proporción de dispositivos que quedan **sin posición**: entre un tercio y casi la
+mitad menos. Con RSSI sin calibrar el ruido real está más cerca de σ = 3 m que de
+σ = 0,5 m, así que es en esa fila donde se nota en el mapa.
+
+### Corrección vertical
+
+Con dos nodos en un lado y uno solo en el opuesto, la trilateración por RSSI
+sitúa los dispositivos más cerca del lado de los dos nodos. Un portátil quieto
+en el centro del triángulo, (10,5; 3,95), aparecía de media en (10,9; 1,2): 2,8 m
+por debajo, en 8 ventanas de 2 minutos.
+
+Se probaron dos correcciones sobre esas mediciones:
+
+| Corrección | Posición media del portátil | Error medio |
+| --- | --- | --- |
+| ninguna | (10,9; 1,2) | 2,8 m |
+| Nodo 3 +6 dB | (10,9; 2,1) | 2,0 m |
+| subir +2 m | (10,9; 2,9) | 1,4 m |
+| **subir +2,5 m** | **(10,9; 3,4)** | **1,2 m** |
+| subir +3 m | (10,9; 3,9) | 1,2 m |
+
+Corregir la señal del Nodo 3 apenas mueve las posiciones, así que se desplaza
+el resultado. Se toma +2,5 m y no +3, que clava justo el portátil, para no
+ajustar la corrección a un único dispositivo. Se declara por zona en
+`coordenadas.ajusteVerticalM` porque depende de cómo está montado cada espacio.
+
+Es una corrección empírica con una sola referencia fiable: un dispositivo que
+esté de verdad junto al lado de los nodos 1 y 2 aparecerá más arriba de lo que
+está. Conviene revisarla con más puntos de referencia.
+
+## Qué cuenta como dispositivo presente
+
+Los nodos oyen mucho más que la plazoleta. Una medición nocturna registró 633
+dispositivos distintos en 10 minutos, con la mediana de la mejor señal en
+−82 dBm: la mayoría estaba en otros pisos o fuera del edificio. Entre lo que sí
+llegaba con fuerza desde dentro, 11 de 15 eran los BSSID de los dos puntos de
+acceso de la universidad (UNBOSQUE, UEB_Tita y VIP en cada aparato), otro era la
+Wi-Fi de un nodo y otro el hotspot del despliegue.
+
+Por eso el mapa, la ocupación consolidada y el panel no cuentan detecciones
+sino **dispositivos presentes**, con un único criterio (`presencia.ts`):
+
+1. **No es infraestructura.** Se clasifica al ingerir, con la MAC en claro, y
+   se guarda en `dispositivo_infraestructura` por su hash:
+   - *Punto de acceso*: dos o más MAC de la misma lectura que comparten los 11
+     primeros dígitos y llegan con menos de 6 dB de diferencia. Son las redes
+     de un mismo aparato.
+   - *Junto a un nodo*: señal de −35 dBm o más, a menos de un metro de la
+     antena. Es equipamiento del despliegue.
+   - *Manual*: excluido con `npm run dispositivo:excluir`.
+
+   Las marcas automáticas caducan a las 24 h sin reconfirmarse
+   (`INFRAESTRUCTURA_VIGENCIA_HORAS`); las manuales, no.
+
+2. **Lo oyen bien todos los nodos que emitieron en la ventana.** El criterio es
+   el nodo que *peor* lo oye, que debe superar `PRESENCIA_RSSI_MINIMO_DBM`
+   (−75 por defecto). Quien está en la plazoleta está a línea de vista de los
+   tres; lo que está tras una pared lo oye fuerte un solo nodo, y lo que está en
+   otro piso lo oyen todos atenuado. La señal más fuerte no separa esos casos;
+   la más débil, sí.
+
+Sobre los 517 dispositivos captados en una ventana de 5 minutos, con 181
+identificados como infraestructura, el umbral decide cuántos quedan:
+
+| Umbral | Presentes | Qué cambia |
+| --- | --- | --- |
+| −72 dBm | 3 | se pierde un portátil que está dentro |
+| **−75 dBm** | **4** | **conserva el portátil; no entra ningún router conocido de fuera** |
+| −76 dBm | 5 | entra el router doméstico de un vecino |
+| −78 dBm | 7 | entran dos dispositivos más sin identificar |
+| −85 dBm | 24 | entran varios routers vecinos más |
+
+El margen es estrecho: el router vecino llega con −76 dBm en el nodo que peor
+lo oye, a 1 dB del corte.
+
+Es un compromiso y no una frontera: un teléfono en el bolsillo en la esquina
+más alejada llega más débil que un portátil, y un router lejano emite más fuerte
+que un teléfono cercano. La medición se hizo de noche, con la plazoleta casi
+vacía; conviene recalibrarlo con gente, recorriendo el espacio con un teléfono y
+`npm run dispositivo:medir`.
+
+Los routers de una sola red, como el del vecino, no se pueden reconocer como
+punto de acceso con lo que envía hoy el productor: Kismet sí distingue puntos
+de acceso de clientes, pero `sniffer.py` reduce ese tipo a `PROBING` o
+`ASSOCIATED` antes de publicarlo.
 
 `id_sensor` debe coincidir con el `sensor_id` que cada Raspberry publica en
 Kafka. Los nodos se auto-registran al enviar su primera lectura, así que si ya

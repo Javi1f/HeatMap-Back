@@ -7,6 +7,7 @@ import { SesionAuth } from '../models/SesionAuth.entity';
 import { Zona } from '../models/Zona.entity';
 import { Sensor } from '../models/Sensor.entity';
 import { Captura } from '../models/Captura.entity';
+import { DispositivoInfraestructura } from '../models/DispositivoInfraestructura.entity';
 import { OcupacionAgregada } from '../models/OcupacionAgregada.entity';
 import { Alerta } from '../models/Alerta.entity';
 import { Reporte } from '../models/Reporte.entity';
@@ -52,6 +53,7 @@ export class DatabaseConfig {
                 Zona,
                 Sensor,
                 Captura,
+                DispositivoInfraestructura,
                 OcupacionAgregada,
                 Alerta,
                 Reporte,

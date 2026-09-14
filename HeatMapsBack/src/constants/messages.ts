@@ -36,5 +36,8 @@ export const MESSAGES = {
         DATA_SENT: 'Datos enviados por WebSocket',
         DECRYPT_ERROR: 'Error al descifrar mensaje',
         EMPTY_MESSAGE: 'Mensaje vacío recibido',
+        STALE_DISCARDED:
+            'mensajes descartados por antiguos. Si se repite, el consumer va atrasado y no se guardan '
+            + 'capturas: comprueba qué instancia del grupo tiene la partición y si da abasto.',
     },
 } as const;

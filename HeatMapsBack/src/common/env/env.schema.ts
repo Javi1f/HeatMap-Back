@@ -239,6 +239,26 @@ export const envSchema = z.object({
      */
     PATH_LOSS_EXPONENT: floatFromString(3.0),
 
+    /**
+     * Señal mínima, en el nodo que **peor** oye a un dispositivo, para contarlo
+     * como presente en la zona, en dBm.
+     *
+     * Medido en la plazoleta con dos referencias conocidas sobre 517
+     * dispositivos captados en 5 minutos: un portátil situado dentro deja de
+     * contarse con −72, y un router doméstico del edificio vecino ya se cuela
+     * con −76. −75 es el único valor que conserva el primero y deja fuera el
+     * segundo, con sólo 1 dB de margen. Con −85 entran varios routers más.
+     *
+     * Es un compromiso, no una frontera: un teléfono en el bolsillo en la esquina
+     * más alejada de un nodo llega más débil que un portátil, y un router lejano
+     * emite más fuerte que un teléfono cercano. Conviene recalibrarlo recorriendo
+     * el espacio con `npm run dispositivo:medir`.
+     */
+    PRESENCIA_RSSI_MINIMO_DBM: floatFromString(-75),
+
+    /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
+    INFRAESTRUCTURA_VIGENCIA_HORAS: intFromString(24),
+
     /** Duración de la ventana de consolidación de ocupación, en minutos. */
     AGGREGATION_INTERVAL_MINUTES: intFromString(5),
 

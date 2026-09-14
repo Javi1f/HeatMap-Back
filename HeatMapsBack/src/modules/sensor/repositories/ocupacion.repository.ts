@@ -1,8 +1,6 @@
 import { injectable } from 'tsyringe';
 import { Repository } from 'typeorm';
 import { NivelOcupacion, OcupacionAgregada } from '../../../models/OcupacionAgregada.entity';
-import { Captura } from '../../../models/Captura.entity';
-import { Sensor } from '../../../models/Sensor.entity';
 import { DatabaseConfig } from '../../../config/database.config';
 
 /**
@@ -56,12 +54,12 @@ export interface ResumenZona {
     ventanasAltas: number;
 }
 
-/** Conteo crudo de una zona dentro de una ventana, antes de clasificar nivel. */
+/** Conteo de una zona dentro de una ventana, antes de clasificar nivel. */
 export interface ConteoZona {
     /** Zona a la que corresponde el conteo. */
     idZona: string;
 
-    /** MAC distintas vistas en la ventana. */
+    /** Dispositivos presentes en la ventana. */
     dispositivosUnicos: number;
 
     /** Subconjunto con MAC de fabricante. */
@@ -81,50 +79,6 @@ export class OcupacionRepository {
 
     constructor(private readonly db: DatabaseConfig) {
         this.repo = db.dataSource.getRepository(OcupacionAgregada);
-    }
-
-    /**
-     * Consolida las detecciones de una ventana agrupadas por zona.
-     *
-     * `dispositivosEstables` cuenta solo las MAC de fabricante: dentro de una
-     * misma ventana una MAC aleatorizada puede rotar y contarse varias veces,
-     * así que el conteo estable es el suelo fiable y el único el techo.
-     *
-     * Las tablas se referencian por su clase de entidad y no por su nombre en
-     * texto: así TypeORM dispone de los metadatos para traducir cada propiedad
-     * a su columna real. Con nombres de tabla en crudo no hay traducción
-     * posible y la consulta se rompería al cambiar el nombre de una columna.
-     *
-     * @param start - Inicio de la ventana, inclusivo.
-     * @param end   - Fin de la ventana, exclusivo.
-     */
-    async aggregateWindow(start: Date, end: Date): Promise<ConteoZona[]> {
-        const rows = await this.db.dataSource
-            .createQueryBuilder()
-            .select('s.idZona', 'idZona')
-            .addSelect('COUNT(DISTINCT c.macHash)', 'dispositivosUnicos')
-            .addSelect(
-                'COUNT(DISTINCT CASE WHEN c.esMacRandom = 0 THEN c.macHash END)',
-                'dispositivosEstables',
-            )
-            .addSelect('AVG(c.rssi)', 'rssiPromedio')
-            .from(Captura, 'c')
-            .innerJoin(Sensor, 's', 's.idSensor = c.idSensor')
-            .where('c.timestampCaptura >= :start AND c.timestampCaptura < :end', { start, end })
-            .groupBy('s.idZona')
-            .getRawMany<{
-                idZona: string;
-                dispositivosUnicos: string;
-                dispositivosEstables: string;
-                rssiPromedio: string | null;
-            }>();
-
-        return rows.map((r) => ({
-            idZona: r.idZona,
-            dispositivosUnicos: Number(r.dispositivosUnicos),
-            dispositivosEstables: Number(r.dispositivosEstables),
-            rssiPromedio: r.rssiPromedio === null ? null : Number(r.rssiPromedio),
-        }));
     }
 
     /** Persiste las filas consolidadas de una ventana. */

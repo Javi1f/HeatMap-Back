@@ -8,6 +8,7 @@ import {
     Observacion,
     PositioningService,
 } from '../sensor/services/positioning.service';
+import { PresenciaService } from '../sensor/services/presencia.service';
 
 /** Lado de cada celda de la rejilla, en metros. */
 const LADO_CELDA_M = 0.5;
@@ -72,17 +73,26 @@ export interface MapaDeCalor {
     /** Mayor conteo de una celda, para normalizar la escala de color. */
     maximo: number;
 
-    /** Dispositivos a los que se pudo asignar una posición. */
+    /** Dispositivos presentes a los que se pudo asignar una posición. */
     situados: number;
 
     /**
-     * Dispositivos detectados que no se pudieron situar.
+     * Dispositivos presentes que no se pudieron situar.
      *
-     * Ocurre cuando solo un nodo los vio, o cuando la posición resultante caía
-     * claramente fuera del espacio. Se informa porque cambia cómo leer el mapa:
-     * una cifra alta significa que el mapa describe a una minoría.
+     * Ocurre cuando la trilateración no tiene solución o cae claramente fuera
+     * del espacio. Se informa porque cambia cómo leer el mapa: una cifra alta
+     * significa que el mapa describe a una minoría.
+     *
+     * Con `situados` suma exactamente los dispositivos presentes, que es la
+     * cifra que muestra la cabecera de la página.
      */
     sinPosicion: number;
+
+    /** Descartados por ser infraestructura: puntos de acceso, equipos junto a un nodo o exclusiones manuales. */
+    descartadosInfraestructura: number;
+
+    /** Descartados porque su señal no es compatible con estar dentro del espacio. */
+    descartadosFueraDeZona: number;
 
     /** Nodos de la zona, con su posición en el plano. */
     nodos: NodoEnMapa[];
@@ -93,6 +103,22 @@ export interface MapaDeCalor {
     /** Fin de la ventana, en ISO. */
     hasta: string;
 }
+
+/**
+ * Corrección vertical de las posiciones declarada por la zona, en metros.
+ *
+ * Con los nodos en dos esquinas de un lado y el tercero en el centro del
+ * opuesto, la trilateración por RSSI sitúa sistemáticamente más cerca del lado
+ * de los dos nodos: la geometría lo favorece y el nodo solitario suele oír más
+ * débil. En la plazoleta se midió con un portátil quieto en un punto conocido,
+ * que salía de media 2,8 m por debajo de su sitio. Como el sesgo depende de cómo
+ * está montado cada espacio, se declara por zona en `coordenadas.ajusteVerticalM`
+ * y no como constante; sin él no se corrige nada.
+ */
+const leerAjusteVertical = (coordenadas: Record<string, unknown> | null): number => {
+    const ajuste = Number(coordenadas?.ajusteVerticalM ?? 0);
+    return Number.isFinite(ajuste) ? ajuste : 0;
+};
 
 /**
  * Extrae ancho y alto de la geometría guardada en la zona.
@@ -117,8 +143,9 @@ const acotar = (v: number, min: number, max: number): number => Math.min(Math.ma
 /**
  * Construye mapas de calor de ocupación a partir de las detecciones crudas.
  *
- * **El recorrido**: se toman las detecciones de la ventana, se promedia la
- * distancia de cada dispositivo a cada nodo, se sitúa cada dispositivo por
+ * **El recorrido**: se toman las detecciones de la ventana, se descarta lo que
+ * no está de verdad en el espacio (ver {@link PresenciaService}), se promedia la
+ * distancia de cada dispositivo restante a cada nodo, se sitúa por
  * trilateración y se cuentan las posiciones por celda.
  *
  * **Por qué una rejilla y no las posiciones sueltas**: devolver la coordenada
@@ -134,6 +161,7 @@ export class HeatmapService {
         private readonly sensores: SensorRepository,
         private readonly zonas: ZonaRepository,
         private readonly posicionador: PositioningService,
+        private readonly presencia: PresenciaService,
     ) {}
 
     /**
@@ -159,8 +187,18 @@ export class HeatmapService {
         const hasta = new Date();
         const desde = new Date(hasta.getTime() - ventana * 60_000);
 
-        const lecturas = await this.capturas.distanciasPorNodo(idZona, desde, hasta);
-        const { rejilla, maximo, situados, sinPosicion } = this.rasterizar(lecturas, limites);
+        const [lecturas, evaluaciones] = await Promise.all([
+            this.capturas.distanciasPorNodo(idZona, desde, hasta),
+            this.presencia.evaluar(desde, hasta, idZona),
+        ]);
+        const evaluacion = evaluaciones.get(idZona);
+        const presentes = evaluacion?.presentes ?? new Map();
+
+        const { rejilla, maximo, situados } = this.rasterizar(
+            lecturas.filter((lectura) => presentes.has(lectura.macHash)),
+            limites,
+            leerAjusteVertical(zona.coordenadas),
+        );
 
         const nodosConDatos = new Set(lecturas.map((l) => l.idSensor));
         const nodos = (await this.sensores.findAll())
@@ -184,7 +222,9 @@ export class HeatmapService {
             rejilla,
             maximo,
             situados,
-            sinPosicion,
+            sinPosicion: presentes.size - situados,
+            descartadosInfraestructura: evaluacion?.descartadosInfraestructura ?? 0,
+            descartadosFueraDeZona: evaluacion?.descartadosFueraDeZona ?? 0,
             nodos,
             desde: desde.toISOString(),
             hasta: hasta.toISOString(),
@@ -193,11 +233,16 @@ export class HeatmapService {
 
     /**
      * Sitúa cada dispositivo y acumula las posiciones en la rejilla.
+     *
+     * La corrección vertical se aplica después de situar y no antes: el
+     * posicionador sigue descartando lo que cae fuera con la estimación cruda, y
+     * sólo se desplaza lo que ya se aceptó.
      */
     private rasterizar(
         lecturas: DistanciaPorNodo[],
         limites: Limites,
-    ): { rejilla: number[][]; maximo: number; situados: number; sinPosicion: number } {
+        ajusteVerticalM: number,
+    ): { rejilla: number[][]; maximo: number; situados: number } {
         const columnas = Math.max(1, Math.ceil(limites.ancho / LADO_CELDA_M));
         const filas = Math.max(1, Math.ceil(limites.alto / LADO_CELDA_M));
         const rejilla: number[][] = Array.from({ length: filas }, () => new Array<number>(columnas).fill(0));
@@ -212,25 +257,21 @@ export class HeatmapService {
 
         let maximo = 0;
         let situados = 0;
-        let sinPosicion = 0;
 
         for (const obs of porDispositivo.values()) {
             const punto = this.posicionador.estimar(obs, limites);
-            if (!punto) {
-                sinPosicion++;
-                continue;
-            }
+            if (!punto) continue;
 
             // Una posición admitida puede caer en el margen exterior tolerado;
             // se pega al borde para que siga contando en el mapa.
             const col = acotar(Math.floor(punto.x / LADO_CELDA_M), 0, columnas - 1);
-            const fil = acotar(Math.floor(punto.y / LADO_CELDA_M), 0, filas - 1);
+            const fil = acotar(Math.floor((punto.y + ajusteVerticalM) / LADO_CELDA_M), 0, filas - 1);
 
             rejilla[fil][col]++;
             situados++;
             if (rejilla[fil][col] > maximo) maximo = rejilla[fil][col];
         }
 
-        return { rejilla, maximo, situados, sinPosicion };
+        return { rejilla, maximo, situados };
     }
 }
