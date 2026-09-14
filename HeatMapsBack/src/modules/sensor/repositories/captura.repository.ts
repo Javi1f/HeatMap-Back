@@ -193,7 +193,7 @@ export class CapturaRepository {
      *
      * @param since - Momento a partir del cual contar.
      */
-    async deteccionesDesde(since: Date): Promise<number> {
+    deteccionesDesde(since: Date): Promise<number> {
         return this.repo
             .createQueryBuilder('c')
             .where('c.timestampCaptura >= :since', { since })

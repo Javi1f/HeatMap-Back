@@ -50,8 +50,27 @@ const DISPERSION_MAXIMA_PUNTO_ACCESO_DB = 6;
  */
 export const RSSI_JUNTO_A_NODO_DBM = -35;
 
+/** Media aritmética de una lista no vacía. */
+const media = (valores: readonly number[]): number => valores.reduce((suma, valor) => suma + valor, 0) / valores.length;
+
 /** Deja sólo los dígitos hexadecimales de una MAC, en minúscula. */
 const normalizar = (mac: string): string => mac.toLowerCase().replace(/[^0-9a-f]/g, '');
+
+/** Agrupa las detecciones por los dígitos que comparten los BSSID de un aparato. */
+const agruparPorPrefijo = (detecciones: readonly DeteccionCruda[]): DeteccionCruda[][] => {
+    const grupos = new Map<string, DeteccionCruda[]>();
+    for (const deteccion of detecciones) {
+        const prefijo = normalizar(deteccion.mac).slice(0, DIGITOS_PREFIJO_PUNTO_ACCESO);
+        grupos.set(prefijo, [...(grupos.get(prefijo) ?? []), deteccion]);
+    }
+    return [...grupos.values()];
+};
+
+/** Indica si otra detección del grupo llega con la misma señal. */
+const tieneHermano = (deteccion: DeteccionCruda, grupo: readonly DeteccionCruda[]): boolean =>
+    grupo.some(
+        (otra) => otra !== deteccion && Math.abs(otra.rssi - deteccion.rssi) <= DISPERSION_MAXIMA_PUNTO_ACCESO_DB,
+    );
 
 /**
  * Detecta infraestructura en las detecciones de una lectura.
@@ -64,34 +83,18 @@ const normalizar = (mac: string): string => mac.toLowerCase().replace(/[^0-9a-f]
 export const detectarInfraestructura = (
     detecciones: readonly DeteccionCruda[],
 ): Map<string, MotivoInfraestructura> => {
+    const validas = detecciones.filter((deteccion) => normalizar(deteccion.mac).length === 12);
     const motivos = new Map<string, MotivoInfraestructura>();
 
-    const validas = detecciones.filter((deteccion) => normalizar(deteccion.mac).length === 12);
-
-    const porPrefijo = new Map<string, DeteccionCruda[]>();
-    for (const deteccion of validas) {
-        const prefijo = normalizar(deteccion.mac).slice(0, DIGITOS_PREFIJO_PUNTO_ACCESO);
-        const grupo = porPrefijo.get(prefijo) ?? [];
-        grupo.push(deteccion);
-        porPrefijo.set(prefijo, grupo);
+    for (const grupo of agruparPorPrefijo(validas)) {
+        grupo
+            .filter((deteccion) => tieneHermano(deteccion, grupo))
+            .forEach((deteccion) => motivos.set(deteccion.mac, 'punto-de-acceso'));
     }
 
-    for (const grupo of porPrefijo.values()) {
-        for (const deteccion of grupo) {
-            const tieneHermano = grupo.some(
-                (otra) =>
-                    otra !== deteccion &&
-                    Math.abs(otra.rssi - deteccion.rssi) <= DISPERSION_MAXIMA_PUNTO_ACCESO_DB,
-            );
-            if (tieneHermano) motivos.set(deteccion.mac, 'punto-de-acceso');
-        }
-    }
-
-    for (const deteccion of validas) {
-        if (!motivos.has(deteccion.mac) && deteccion.rssi >= RSSI_JUNTO_A_NODO_DBM) {
-            motivos.set(deteccion.mac, 'junto-a-nodo');
-        }
-    }
+    validas
+        .filter((deteccion) => !motivos.has(deteccion.mac) && deteccion.rssi >= RSSI_JUNTO_A_NODO_DBM)
+        .forEach((deteccion) => motivos.set(deteccion.mac, 'junto-a-nodo'));
 
     return motivos;
 };
@@ -141,6 +144,47 @@ export interface EvaluacionPresencia {
     descartadosFueraDeZona: number;
 }
 
+/** Señales de un mismo dispositivo en todos los nodos que lo oyeron. */
+interface SenalesDeDispositivo {
+    /** RSSI medio en cada nodo, en dBm. */
+    rssi: number[];
+
+    /** `true` si su MAC es administrada localmente. */
+    esMacRandom: boolean;
+}
+
+/** Agrupa las señales por dispositivo. */
+const agruparPorDispositivo = (senales: readonly SenalPorNodo[]): Map<string, SenalesDeDispositivo> => {
+    const porDispositivo = new Map<string, SenalesDeDispositivo>();
+    for (const senal of senales) {
+        const previo = porDispositivo.get(senal.macHash) ?? { rssi: [], esMacRandom: false };
+        porDispositivo.set(senal.macHash, {
+            rssi: [...previo.rssi, senal.rssi],
+            esMacRandom: previo.esMacRandom || senal.esMacRandom,
+        });
+    }
+    return porDispositivo;
+};
+
+/** Veredicto sobre un dispositivo. */
+type Veredicto = 'infraestructura' | 'fuera' | 'presente';
+
+/**
+ * Clasifica un dispositivo según los criterios de presencia.
+ *
+ * @param nodosActivos - Nodos que emitieron en la ventana.
+ */
+const clasificar = (
+    macHash: string,
+    { rssi }: SenalesDeDispositivo,
+    nodosActivos: number,
+    criterios: CriteriosPresencia,
+): Veredicto => {
+    if (criterios.excluidos.has(macHash)) return 'infraestructura';
+    const loOyenTodos = rssi.length >= nodosActivos;
+    return loOyenTodos && Math.min(...rssi) >= criterios.rssiMinimoDbm ? 'presente' : 'fuera';
+};
+
 /**
  * Decide qué dispositivos están dentro de la zona.
  *
@@ -160,34 +204,21 @@ export const evaluarPresencia = (
     senales: readonly SenalPorNodo[],
     criterios: CriteriosPresencia,
 ): EvaluacionPresencia => {
-    const nodosActivos = new Set(senales.map((s) => s.idSensor));
+    const nodosActivos = new Set(senales.map((senal) => senal.idSensor)).size;
+    const resultado: EvaluacionPresencia = {
+        presentes: new Map(),
+        descartadosInfraestructura: 0,
+        descartadosFueraDeZona: 0,
+    };
 
-    const porDispositivo = new Map<string, { rssi: number[]; esMacRandom: boolean }>();
-    for (const senal of senales) {
-        const dispositivo = porDispositivo.get(senal.macHash) ?? { rssi: [], esMacRandom: false };
-        dispositivo.rssi.push(senal.rssi);
-        dispositivo.esMacRandom ||= senal.esMacRandom;
-        porDispositivo.set(senal.macHash, dispositivo);
+    for (const [macHash, dispositivo] of agruparPorDispositivo(senales)) {
+        const veredicto = clasificar(macHash, dispositivo, nodosActivos, criterios);
+        if (veredicto === 'infraestructura') resultado.descartadosInfraestructura++;
+        else if (veredicto === 'fuera') resultado.descartadosFueraDeZona++;
+        else resultado.presentes.set(macHash, { rssiMedio: media(dispositivo.rssi), esMacRandom: dispositivo.esMacRandom });
     }
 
-    const presentes = new Map<string, DispositivoPresente>();
-    let descartadosInfraestructura = 0;
-    let descartadosFueraDeZona = 0;
-
-    for (const [macHash, { rssi, esMacRandom }] of porDispositivo) {
-        if (criterios.excluidos.has(macHash)) {
-            descartadosInfraestructura++;
-            continue;
-        }
-        if (rssi.length < nodosActivos.size || Math.min(...rssi) < criterios.rssiMinimoDbm) {
-            descartadosFueraDeZona++;
-            continue;
-        }
-        const rssiMedio = rssi.reduce((suma, valor) => suma + valor, 0) / rssi.length;
-        presentes.set(macHash, { rssiMedio, esMacRandom });
-    }
-
-    return { presentes, descartadosInfraestructura, descartadosFueraDeZona };
+    return resultado;
 };
 
 /** Cifras de los dispositivos presentes, listas para mostrar o consolidar. */

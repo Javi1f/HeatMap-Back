@@ -36,6 +36,22 @@ const escribir = (linea: string): void => {
 /** Hora local en `HH:MM:SS`. */
 const hora = (): string => new Date().toTimeString().slice(0, 8);
 
+/**
+ * Explica por qué el sistema cuenta o descarta el dispositivo.
+ *
+ * @param sordos - Nodos que emitieron pero no lo oyeron.
+ */
+const veredicto = (presente: boolean, excluido: boolean, sordos: readonly string[], umbral: number): string => {
+    if (presente) return 'PRESENTE';
+    if (excluido) return 'EXCLUIDO como infraestructura';
+    if (sordos.length > 0) return `FUERA: no lo oye ${sordos.join(', ')}`;
+    return `FUERA: el nodo más débil no llega a ${umbral} dBm`;
+};
+
+/** Texto de la señal de un nodo, o una raya si no lo oyó. */
+const columna = (nodo: string, rssi: number | undefined): string =>
+    `${nodo} ${rssi === undefined ? '  —' : Math.round(rssi).toString().padStart(4)}`;
+
 /** Realiza una medición y la imprime. */
 const medir = async (macHash: string): Promise<void> => {
     const capturas = container.resolve(CapturaRepository);
@@ -59,25 +75,24 @@ const medir = async (macHash: string): Promise<void> => {
     const nodos = [...new Set(deLaZona.map((senal) => senal.idSensor))].sort();
     const porNodo = new Map(propias.map((senal) => [senal.idSensor, senal.rssi]));
 
-    const columnas = nodos
-        .map((nodo) => {
-            const rssi = porNodo.get(nodo);
-            return `${nodo} ${rssi === undefined ? '  —' : Math.round(rssi).toString().padStart(4)}`;
-        })
-        .join('   ');
+    const columnas = nodos.map((nodo) => columna(nodo, porNodo.get(nodo))).join('   ');
 
-    const resultado = evaluarPresencia(deLaZona, { rssiMinimoDbm: cfg.presenciaRssiMinimoDbm, excluidos });
+    const presente = evaluarPresencia(deLaZona, { rssiMinimoDbm: cfg.presenciaRssiMinimoDbm, excluidos })
+        .presentes.has(macHash);
     const masDebil = Math.round(Math.min(...propias.map((senal) => senal.rssi)));
     const sordos = nodos.filter((nodo) => !porNodo.has(nodo));
+    const texto = veredicto(presente, excluidos.has(macHash), sordos, cfg.presenciaRssiMinimoDbm);
 
-    let veredicto = `FUERA: el nodo más débil no llega a ${cfg.presenciaRssiMinimoDbm} dBm`;
-    if (resultado.presentes.has(macHash)) veredicto = 'PRESENTE';
-    else if (excluidos.has(macHash)) veredicto = 'EXCLUIDO como infraestructura';
-    else if (sordos.length > 0) veredicto = `FUERA: no lo oye ${sordos.join(', ')}`;
-
-    escribir(`${hora()}  ${columnas}   | más débil ${masDebil} dBm | ${veredicto}`);
+    escribir(`${hora()}  ${columnas}   | más débil ${masDebil} dBm | ${texto}`);
 };
 
+/**
+ * Punto de entrada: valida la MAC y mide en bucle hasta recibir Ctrl+C.
+ *
+ * La parada va por un `AbortController` y no por una variable que cambia un
+ * manejador de señal: así la condición del bucle refleja un estado que otro
+ * código puede cambiar, en lugar de una variable que el bucle nunca toca.
+ */
 const principal = async (): Promise<void> => {
     const mac = process.argv[2] ?? '';
     const anonimizador = container.resolve(MacAnonymizerService);
@@ -93,12 +108,10 @@ const principal = async (): Promise<void> => {
 
     escribir(`Midiendo cada ${PAUSA_MS / 1000} s sobre los últimos ${VENTANA_MS / 1000} s. Ctrl+C para terminar.\n`);
 
-    let activo = true;
-    process.once('SIGINT', () => {
-        activo = false;
-    });
+    const parada = new AbortController();
+    process.once('SIGINT', () => parada.abort());
 
-    while (activo) {
+    while (!parada.signal.aborted) {
         await medir(macHash);
         await new Promise((resolver) => setTimeout(resolver, PAUSA_MS));
     }
