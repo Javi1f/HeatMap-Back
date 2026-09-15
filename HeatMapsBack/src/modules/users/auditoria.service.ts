@@ -4,6 +4,10 @@ import { DatabaseConfig } from '../../config/database.config';
 import { LoggerService } from '../../common/logger/logger.service';
 import { EventoAuditoria, TipoEventoAuditoria } from '../../models/EventoAuditoria.entity';
 
+/** Recorta un texto opcional al tamaño de su columna; `null` si no hay texto. */
+const recortar = (texto: string | null | undefined, largo: number): string | null =>
+    texto === null || texto === undefined ? null : texto.slice(0, largo);
+
 /** Datos de un evento por registrar. */
 export interface NuevoEvento {
     /** Acción realizada. */
@@ -67,8 +71,8 @@ export class AuditoriaService {
             await this.repo.insert({
                 tipo: evento.tipo,
                 idAdmin: evento.idAdmin ?? null,
-                detalle: evento.detalle?.slice(0, 255) ?? null,
-                ipOrigen: evento.ip?.slice(0, 45) ?? null,
+                detalle: recortar(evento.detalle, 255),
+                ipOrigen: recortar(evento.ip, 45),
             });
         } catch (err) {
             this.logger.error(`No se pudo registrar el evento de auditoría ${evento.tipo}`, err);

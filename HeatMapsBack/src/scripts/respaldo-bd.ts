@@ -91,14 +91,19 @@ const volcarTabla = async (conexion: mysql.Connection, tabla: string, salida: No
     return total;
 };
 
+/** Tablas indicadas con `--excluir tabla1,tabla2`. */
+const tablasExcluidas = (argumentos: readonly string[]): Set<string> => {
+    const indice = argumentos.indexOf('--excluir');
+    return new Set(indice > -1 ? (argumentos[indice + 1] ?? '').split(',').filter(Boolean) : []);
+};
+
 /**
  * Punto de entrada.
  *
  * @param carpeta - Dónde dejar el archivo; por defecto `respaldos/` en la raíz del proyecto.
  */
 export const principal = async (carpeta = path.resolve(__dirname, '..', '..', 'respaldos')): Promise<void> => {
-    const indice = process.argv.indexOf('--excluir');
-    const excluidas = new Set(indice > -1 ? (process.argv[indice + 1] ?? '').split(',').filter(Boolean) : []);
+    const excluidas = tablasExcluidas(process.argv);
 
     const env = container.resolve(EnvService);
     const base = env.get('DB_DATABASE');

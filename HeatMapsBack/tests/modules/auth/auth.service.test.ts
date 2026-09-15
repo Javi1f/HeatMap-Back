@@ -110,7 +110,9 @@ describe('AuthService.login', () => {
 });
 
 describe('AuthService.register', () => {
-    const dto = { username: 'ana', email: 'ana@unbosque.edu.co', password: 'Clave-segura-1' };
+    /** Contraseña ficticia de prueba; no es una credencial real. */
+    const clave = 'Clave-segura-1'; // skipcq: SCT-A000
+    const dto = { username: 'ana', email: 'ana@unbosque.edu.co', password: clave };
 
     it('rechaza un correo fuera de la lista blanca', async () => {
         entorno.allowed.isAllowed.mockResolvedValue(false);

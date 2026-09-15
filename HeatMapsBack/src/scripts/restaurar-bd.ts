@@ -45,15 +45,46 @@ const ejecutarArchivo = async (conexion: mysql.Connection, archivo: string): Pro
     return esperadas;
 };
 
-/** Punto de entrada. */
-export const principal = async (): Promise<void> => {
+/** Archivo y base indicados en la línea de comandos, o `null` si faltan. */
+const argumentos = (): { archivo: string; base: string } | null => {
     const archivo = process.argv[2];
     const base = opcion('--base');
-    if (!archivo || archivo.startsWith('--') || !base) {
+    if (!archivo || archivo.startsWith('--') || !base) return null;
+    return { archivo, base };
+};
+
+/**
+ * Compara las filas de cada tabla con las que declara el manifiesto.
+ *
+ * @returns Cuántas tablas coinciden.
+ */
+const verificarConteos = async (conexion: mysql.Connection, esperadas: Map<string, number>): Promise<number> => {
+    // Los conteos son independientes entre sí: se piden todos a la vez.
+    const conteos = await Promise.all(
+        [...esperadas].map(async ([tabla, filas]) => {
+            const [[{ total }]] = await conexion.query<mysql.RowDataPacket[]>(`SELECT COUNT(*) AS total FROM ${identificador(tabla)}`);
+            return { tabla, filas, total: Number(total) };
+        }),
+    );
+
+    let correctas = 0;
+    for (const { tabla, filas, total } of conteos) {
+        const coincide = total === filas;
+        if (coincide) correctas++;
+        escribir(`  ${coincide ? 'OK   ' : 'FALLA'} ${tabla}: ${total} de ${filas} filas`);
+    }
+    return correctas;
+};
+
+/** Punto de entrada. */
+export const principal = async (): Promise<void> => {
+    const indicados = argumentos();
+    if (!indicados) {
         escribir('Uso: npm run bd:restaurar -- <archivo.sql.gz> --base <nombre> [--sobrescribir]');
         process.exitCode = 1;
         return;
     }
+    const { archivo, base } = indicados;
 
     const env = container.resolve(EnvService);
     if (base === env.get('DB_DATABASE') && !process.argv.includes('--sobrescribir')) {
@@ -68,21 +99,7 @@ export const principal = async (): Promise<void> => {
         await conexion.changeUser({ database: base });
 
         const esperadas = await ejecutarArchivo(conexion, archivo);
-
-        // Los conteos son independientes entre sí: se piden todos a la vez.
-        const conteos = await Promise.all(
-            [...esperadas].map(async ([tabla, filas]) => {
-                const [[{ total }]] = await conexion.query<mysql.RowDataPacket[]>(`SELECT COUNT(*) AS total FROM ${identificador(tabla)}`);
-                return { tabla, filas, total: Number(total) };
-            }),
-        );
-
-        let correctas = 0;
-        for (const { tabla, filas, total } of conteos) {
-            const coincide = total === filas;
-            if (coincide) correctas++;
-            escribir(`  ${coincide ? 'OK   ' : 'FALLA'} ${tabla}: ${total} de ${filas} filas`);
-        }
+        const correctas = await verificarConteos(conexion, esperadas);
         escribir(`\n${correctas} de ${esperadas.size} tablas restauradas con el número de filas esperado en «${base}».`);
         if (correctas !== esperadas.size) process.exitCode = 1;
     } finally {

@@ -9,6 +9,8 @@ import {
     PositioningService,
 } from '../sensor/services/positioning.service';
 import { PresenciaService } from '../sensor/services/presencia.service';
+import type { EvaluacionPresencia } from '../sensor/services/presencia';
+import type { Zona } from '../../models/Zona.entity';
 import { crearCacheTemporal } from '../../common/utils/cache-temporal';
 
 /** Lado de cada celda de la rejilla, en metros. */
@@ -132,6 +134,9 @@ const leerAjusteVertical = (coordenadas: Record<string, unknown> | null): number
     return Number.isFinite(ajuste) ? ajuste : 0;
 };
 
+/** `true` si la medida es un número finito y positivo. */
+const esMedidaValida = (medida: number): boolean => Number.isFinite(medida) && medida > 0;
+
 /**
  * Extrae ancho y alto de la geometría guardada en la zona.
  *
@@ -142,11 +147,26 @@ const leerGeometria = (coordenadas: Record<string, unknown> | null): Limites | n
 
     const ancho = Number(coordenadas.ancho);
     const alto = Number(coordenadas.alto);
+    return esMedidaValida(ancho) && esMedidaValida(alto) ? { ancho, alto } : null;
+};
 
-    if (!Number.isFinite(ancho) || !Number.isFinite(alto)) return null;
-    if (ancho <= 0 || alto <= 0) return null;
 
-    return { ancho, alto };
+/** Evaluación de una zona sin ninguna detección en la ventana. */
+const SIN_EVALUACION: Readonly<EvaluacionPresencia> = {
+    presentes: new Map(),
+    descartadosInfraestructura: 0,
+    descartadosFueraDeZona: 0,
+};
+
+/** Agrupa las lecturas por dispositivo: cada uno aporta una observación por nodo. */
+const agruparPorDispositivo = (lecturas: readonly DistanciaPorNodo[]): Map<string, Observacion[]> => {
+    const porDispositivo = new Map<string, Observacion[]>();
+    for (const lectura of lecturas) {
+        const obs = porDispositivo.get(lectura.macHash) ?? [];
+        obs.push({ x: lectura.posX, y: lectura.posY, d: lectura.distancia });
+        porDispositivo.set(lectura.macHash, obs);
+    }
+    return porDispositivo;
 };
 
 /** Restringe un valor al rango indicado, ambos extremos incluidos. */
@@ -190,15 +210,7 @@ export class HeatmapService {
 
     /** Calcula el mapa sin pasar por la caché. */
     private async calcular(idZona: string, minutos: number): Promise<MapaDeCalor> {
-        const zona = await this.zonas.findById(idZona);
-        if (!zona) throw new NotFoundError('La zona no existe');
-
-        const limites = leerGeometria(zona.coordenadas);
-        if (!limites) {
-            throw new ValidationError(
-                'La zona no tiene geometría definida. Registra su ancho y alto en metros antes de generar el mapa.',
-            );
-        }
+        const { zona, limites } = await this.zonaConGeometria(idZona);
 
         const ventana = Math.min(Math.max(minutos, 1), VENTANA_MAXIMA_MIN);
         const hasta = new Date();
@@ -208,17 +220,58 @@ export class HeatmapService {
             this.capturas.distanciasPorNodo(idZona, desde, hasta),
             this.presencia.evaluar(desde, hasta, idZona),
         ]);
-        const evaluacion = evaluaciones.get(idZona);
-        const presentes = evaluacion?.presentes ?? new Map();
+        const evaluacion = evaluaciones.get(idZona) ?? SIN_EVALUACION;
 
         const { rejilla, maximo, situados } = this.rasterizar(
-            lecturas.filter((lectura) => presentes.has(lectura.macHash)),
+            lecturas.filter((lectura) => evaluacion.presentes.has(lectura.macHash)),
             limites,
             leerAjusteVertical(zona.coordenadas),
         );
 
+        return {
+            idZona: zona.idZona,
+            nombre: zona.nombre,
+            ancho: limites.ancho,
+            alto: limites.alto,
+            ladoCelda: LADO_CELDA_M,
+            // `rasterizar` garantiza al menos una fila y una columna.
+            columnas: rejilla[0].length,
+            filas: rejilla.length,
+            rejilla,
+            maximo,
+            situados,
+            sinPosicion: evaluacion.presentes.size - situados,
+            descartadosInfraestructura: evaluacion.descartadosInfraestructura,
+            descartadosFueraDeZona: evaluacion.descartadosFueraDeZona,
+            nodos: await this.nodosDeZona(idZona, lecturas),
+            desde: desde.toISOString(),
+            hasta: hasta.toISOString(),
+        };
+    }
+
+    /**
+     * Busca la zona y lee su geometría.
+     *
+     * @throws NotFoundError   si la zona no existe.
+     * @throws ValidationError si la zona no tiene geometría definida.
+     */
+    private async zonaConGeometria(idZona: string): Promise<{ zona: Zona; limites: Limites }> {
+        const zona = await this.zonas.findById(idZona);
+        if (!zona) throw new NotFoundError('La zona no existe');
+
+        const limites = leerGeometria(zona.coordenadas);
+        if (!limites) {
+            throw new ValidationError(
+                'La zona no tiene geometría definida. Registra su ancho y alto en metros antes de generar el mapa.',
+            );
+        }
+        return { zona, limites };
+    }
+
+    /** Nodos de la zona con posición, marcando los que aportaron lecturas a la ventana. */
+    private async nodosDeZona(idZona: string, lecturas: readonly DistanciaPorNodo[]): Promise<NodoEnMapa[]> {
         const nodosConDatos = new Set(lecturas.map((lectura) => lectura.idSensor));
-        const nodos = (await this.sensores.findAll())
+        return (await this.sensores.findAll())
             .filter((sensor) => sensor.idZona === idZona && sensor.posX !== null && sensor.posY !== null)
             .map((sensor) => ({
                 idSensor: sensor.idSensor,
@@ -227,25 +280,6 @@ export class HeatmapService {
                 y: sensor.posY as number,
                 aportoDatos: nodosConDatos.has(sensor.idSensor),
             }));
-
-        return {
-            idZona: zona.idZona,
-            nombre: zona.nombre,
-            ancho: limites.ancho,
-            alto: limites.alto,
-            ladoCelda: LADO_CELDA_M,
-            columnas: rejilla[0]?.length ?? 0,
-            filas: rejilla.length,
-            rejilla,
-            maximo,
-            situados,
-            sinPosicion: presentes.size - situados,
-            descartadosInfraestructura: evaluacion?.descartadosInfraestructura ?? 0,
-            descartadosFueraDeZona: evaluacion?.descartadosFueraDeZona ?? 0,
-            nodos,
-            desde: desde.toISOString(),
-            hasta: hasta.toISOString(),
-        };
     }
 
     /**
@@ -264,18 +298,10 @@ export class HeatmapService {
         const filas = Math.max(1, Math.ceil(limites.alto / LADO_CELDA_M));
         const rejilla: number[][] = Array.from({ length: filas }, () => new Array<number>(columnas).fill(0));
 
-        // Agrupar por dispositivo: cada uno aporta una observación por nodo.
-        const porDispositivo = new Map<string, Observacion[]>();
-        for (const lectura of lecturas) {
-            const obs = porDispositivo.get(lectura.macHash) ?? [];
-            obs.push({ x: lectura.posX, y: lectura.posY, d: lectura.distancia });
-            porDispositivo.set(lectura.macHash, obs);
-        }
-
         let maximo = 0;
         let situados = 0;
 
-        for (const obs of porDispositivo.values()) {
+        for (const obs of agruparPorDispositivo(lecturas).values()) {
             const punto = this.posicionador.estimar(obs, limites);
             if (!punto) continue;
 
@@ -286,7 +312,7 @@ export class HeatmapService {
 
             rejilla[fil][col]++;
             situados++;
-            if (rejilla[fil][col] > maximo) maximo = rejilla[fil][col];
+            maximo = Math.max(maximo, rejilla[fil][col]);
         }
 
         return { rejilla, maximo, situados };

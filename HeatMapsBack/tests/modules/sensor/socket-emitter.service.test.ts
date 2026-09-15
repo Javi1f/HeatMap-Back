@@ -19,18 +19,31 @@ interface ServidorFalso {
 /** Servidor de Socket.IO simulado que guarda sus manejadores y emisiones. */
 const { servidores, Server } = vi.hoisted(() => {
     const creados: ServidorFalso[] = [];
-    const constructor = vi.fn(function (this: unknown, http: unknown, opciones: unknown) {
-        const manejadores: Record<string, (s: unknown) => void> = {};
-        const servidor = {
-            http, opciones, manejadores,
-            on: vi.fn((evento: string, fn: (s: unknown) => void) => { manejadores[evento] = fn; }),
-            emit: vi.fn(),
-            close: vi.fn((cb: () => void) => cb()),
-        };
-        creados.push(servidor);
-        return servidor;
-    });
-    return { servidores: creados, Server: constructor };
+
+    /** Servidor simulado: registra lo que recibe y se guarda para inspeccionarlo. */
+    class ServidorSimulado implements ServidorFalso {
+        /** Servidor HTTP recibido. */
+        http: unknown;
+        /** Opciones de creación. */
+        opciones: unknown;
+        /** Manejadores registrados, por evento. */
+        manejadores: Record<string, (socket: unknown) => void> = {};
+        /** Registro de manejadores. */
+        on = vi.fn((evento: string, fn: (socket: unknown) => void) => { this.manejadores[evento] = fn; });
+        /** Difusión a todos los clientes. */
+        emit = vi.fn();
+        /** Cierre del servidor. */
+        close = vi.fn((alCerrar: () => void) => alCerrar());
+
+        /** Guarda los argumentos con los que el servicio crea el servidor. */
+        constructor(http: unknown, opciones: unknown) {
+            this.http = http;
+            this.opciones = opciones;
+            creados.push(this);
+        }
+    }
+
+    return { servidores: creados, Server: vi.fn(ServidorSimulado) };
 });
 vi.mock('socket.io', () => ({ Server }));
 

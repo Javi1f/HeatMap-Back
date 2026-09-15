@@ -178,15 +178,7 @@ export class AuthService {
             throw new NotFoundError('No hay un registro pendiente para este correo');
         }
 
-        if (new Date() > pending.expiresAt) {
-            await this.pendingRepo.deleteById(pending.id);
-            throw new VerificationCodeExpiredError();
-        }
-
-        if (pending.attempts >= this.verification.maxAttempts) {
-            await this.pendingRepo.deleteById(pending.id);
-            throw new TooManyAttemptsError();
-        }
+        await this.descartarSiNoVigente(pending);
 
         const decryptedCode = this.cipher.decrypt(pending.code);
         if (decryptedCode !== dto.code) {
@@ -201,6 +193,24 @@ export class AuthService {
         const view = this.toView(admin);
         const token = await this.issueToken(view, ipOrigen);
         return { admin: view, token };
+    }
+
+    /**
+     * Borra el registro pendiente si ya no admite más intentos.
+     *
+     * @throws {@link VerificationCodeExpiredError} si el código caducó.
+     * @throws {@link TooManyAttemptsError} si se agotaron los intentos.
+     */
+    private async descartarSiNoVigente(pending: PendingRegistration): Promise<void> {
+        if (new Date() > pending.expiresAt) {
+            await this.pendingRepo.deleteById(pending.id);
+            throw new VerificationCodeExpiredError();
+        }
+
+        if (pending.attempts >= this.verification.maxAttempts) {
+            await this.pendingRepo.deleteById(pending.id);
+            throw new TooManyAttemptsError();
+        }
     }
 
     /**

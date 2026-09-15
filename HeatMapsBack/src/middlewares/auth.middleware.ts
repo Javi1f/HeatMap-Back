@@ -4,6 +4,14 @@ import { JwtService } from '../modules/auth/services/jwt.service';
 import { SessionService } from '../modules/auth/services/session.service';
 import { UnauthorizedError } from '../common/errors';
 
+/** Extrae el token de la cabecera `Authorization: Bearer <token>`. */
+const extraerToken = (cabecera: string | undefined): string => {
+    if (!cabecera?.startsWith('Bearer ')) throw new UnauthorizedError('Token no proporcionado');
+    const token = cabecera.slice('Bearer '.length).trim();
+    if (!token) throw new UnauthorizedError('Token vacío');
+    return token;
+};
+
 /**
  * Middleware de autenticación basado en JWT (`Authorization: Bearer <token>`).
  *
@@ -21,12 +29,7 @@ export const authMiddleware = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const header = req.headers.authorization;
-        if (!header || !header.startsWith('Bearer ')) {
-            throw new UnauthorizedError('Token no proporcionado');
-        }
-        const token = header.slice('Bearer '.length).trim();
-        if (!token) throw new UnauthorizedError('Token vacío');
+        const token = extraerToken(req.headers.authorization);
 
         const jwt = container.resolve(JwtService);
         const payload = jwt.verify(token);

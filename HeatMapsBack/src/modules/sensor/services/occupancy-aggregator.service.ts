@@ -23,6 +23,18 @@ import { PresenciaService } from './presencia.service';
 const UMBRAL_ABSOLUTO_MEDIA = 30;
 const UMBRAL_ABSOLUTO_ALTA = 60;
 
+/** Nivel que corresponde a un valor frente a sus dos umbrales. */
+const nivelPorUmbrales = (valor: number, media: number, alta: number): NivelOcupacion => {
+    if (valor >= alta) return 'alta';
+    return valor >= media ? 'media' : 'baja';
+};
+
+/** Texto de la alerta de una zona en nivel alto. */
+const mensajeAlerta = (zona: Zona | undefined, detectados: number): string => {
+    const aforo = zona?.capacidadMax ? ` sobre un aforo de ${zona.capacidadMax}` : '';
+    return `Ocupación alta en ${zona?.nombre ?? 'zona desconocida'}: ${detectados} dispositivos detectados${aforo}.`;
+};
+
 /**
  * Consolida periódicamente las detecciones crudas en ocupación por zona y
  * levanta alertas cuando una zona entra en nivel alto.
@@ -157,15 +169,9 @@ export class OccupancyAggregatorService {
         const cantidad = conteo.dispositivosUnicos;
 
         if (!zona?.capacidadMax) {
-            if (cantidad >= UMBRAL_ABSOLUTO_ALTA) return 'alta';
-            if (cantidad >= UMBRAL_ABSOLUTO_MEDIA) return 'media';
-            return 'baja';
+            return nivelPorUmbrales(cantidad, UMBRAL_ABSOLUTO_MEDIA, UMBRAL_ABSOLUTO_ALTA);
         }
-
-        const ratio = cantidad / zona.capacidadMax;
-        if (ratio >= this.cfg.occupancyHighRatio) return 'alta';
-        if (ratio >= this.cfg.occupancyMediumRatio) return 'media';
-        return 'baja';
+        return nivelPorUmbrales(cantidad / zona.capacidadMax, this.cfg.occupancyMediumRatio, this.cfg.occupancyHighRatio);
     }
 
     /**
@@ -189,15 +195,8 @@ export class OccupancyAggregatorService {
         const nuevas = altas.filter((_fila, indice) => !yaAbiertas[indice]);
 
         await Promise.all(nuevas.map(async (fila) => {
-            const zona = zonas.get(fila.idZona);
             const detectados = porZona.get(fila.idZona)?.dispositivosUnicos ?? 0;
-            const aforo = zona?.capacidadMax ? ` sobre un aforo de ${zona.capacidadMax}` : '';
-
-            await this.alertas.create(
-                fila.idZona,
-                'advertencia',
-                `Ocupación alta en ${zona?.nombre ?? 'zona desconocida'}: ${detectados} dispositivos detectados${aforo}.`,
-            );
+            await this.alertas.create(fila.idZona, 'advertencia', mensajeAlerta(zonas.get(fila.idZona), detectados));
             this.logger.warn(`Alerta de aglomeración levantada en zona ${fila.idZona}`);
         }));
     }

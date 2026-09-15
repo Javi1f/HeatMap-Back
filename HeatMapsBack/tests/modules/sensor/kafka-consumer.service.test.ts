@@ -21,25 +21,30 @@ interface ConsumidorFalso {
 /** Consumidor de kafkajs simulado: guarda los manejadores para dispararlos a mano. */
 const { consumidores, Kafka } = vi.hoisted(() => {
     const creados: ConsumidorFalso[] = [];
-    const constructor = vi.fn(function (this: unknown) {
-        return {
-            consumer: vi.fn(() => {
-                const manejadores: Record<string, (evento: unknown) => void> = {};
-                const consumidor = {
-                    events: { GROUP_JOIN: 'consumer.group_join', CRASH: 'consumer.crash' },
-                    manejadores,
-                    on: vi.fn((evento: string, fn: (e: unknown) => void) => { manejadores[evento] = fn; }),
-                    connect: vi.fn(() => Promise.resolve()),
-                    subscribe: vi.fn(() => Promise.resolve()),
-                    run: vi.fn(() => Promise.resolve()),
-                    disconnect: vi.fn(() => Promise.resolve()),
-                };
-                creados.push(consumidor);
-                return consumidor;
-            }),
+
+    /** Crea un consumidor simulado y lo guarda para inspeccionarlo. */
+    const nuevoConsumidor = (): ConsumidorFalso => {
+        const manejadores: Record<string, (evento: unknown) => void> = {};
+        const consumidor = {
+            events: { GROUP_JOIN: 'consumer.group_join', CRASH: 'consumer.crash' },
+            manejadores,
+            on: vi.fn((evento: string, fn: (e: unknown) => void) => { manejadores[evento] = fn; }),
+            connect: vi.fn(() => Promise.resolve()),
+            subscribe: vi.fn(() => Promise.resolve()),
+            run: vi.fn(() => Promise.resolve()),
+            disconnect: vi.fn(() => Promise.resolve()),
         };
-    });
-    return { consumidores: creados, Kafka: constructor };
+        creados.push(consumidor);
+        return consumidor;
+    };
+
+    /** Cliente de kafkajs simulado: cada `consumer()` crea un consumidor nuevo. */
+    class KafkaSimulado {
+        /** Fábrica de consumidores. */
+        consumer = vi.fn(nuevoConsumidor);
+    }
+
+    return { consumidores: creados, Kafka: vi.fn(KafkaSimulado) };
 });
 vi.mock('kafkajs', () => ({ Kafka }));
 
@@ -140,25 +145,26 @@ describe('KafkaConsumerService: caídas', () => {
     it('no se marca activo si cayó sin remedio durante el arranque', async () => {
         vi.useFakeTimers();
         const primer = vi.fn();
-        Kafka.mockImplementationOnce(function () {
-            return {
-                consumer: vi.fn(() => {
-                    const manejadores: Record<string, (e: unknown) => void> = {};
-                    const consumidor = {
-                        events: { GROUP_JOIN: 'g', CRASH: 'c' }, manejadores,
-                        on: vi.fn((evento: string, fn: (x: unknown) => void) => { manejadores[evento] = fn; }),
-                        connect: vi.fn(), subscribe: vi.fn(), disconnect: vi.fn(),
-                        run: vi.fn(() => {
-                            primer();
-                            manejadores.c(caida(false, new Error('rechazado')));
-                            return Promise.resolve();
-                        }),
-                    };
-                    consumidores.push(consumidor as unknown as ConsumidorFalso);
-                    return consumidor;
-                }),
-            };
-        } as never);
+        /** Cliente cuyo consumidor cae sin remedio durante `run`. */
+        class KafkaQueCae {
+            /** Fábrica de un consumidor que cae al unirse al grupo. */
+            consumer = vi.fn(() => {
+                const manejadores: Record<string, (e: unknown) => void> = {};
+                const consumidor = {
+                    events: { GROUP_JOIN: 'g', CRASH: 'c' }, manejadores,
+                    on: vi.fn((evento: string, fn: (x: unknown) => void) => { manejadores[evento] = fn; }),
+                    connect: vi.fn(), subscribe: vi.fn(), disconnect: vi.fn(),
+                    run: vi.fn(() => {
+                        primer();
+                        manejadores.c(caida(false, new Error('rechazado')));
+                        return Promise.resolve();
+                    }),
+                };
+                consumidores.push(consumidor as unknown as ConsumidorFalso);
+                return consumidor;
+            });
+        }
+        Kafka.mockImplementationOnce(KafkaQueCae as never);
 
         await entorno.servicio.start();
 

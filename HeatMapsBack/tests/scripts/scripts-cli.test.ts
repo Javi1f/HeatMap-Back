@@ -46,8 +46,8 @@ import { SensingConfig } from '../../src/config/sensing.config';
 import { InfraestructuraRepository } from '../../src/modules/sensor/repositories/infraestructura.repository';
 import { CapturaRepository } from '../../src/modules/sensor/repositories/captura.repository';
 import { MacAnonymizerService } from '../../src/modules/sensor/services/mac-anonymizer.service';
-import * as excluir from '../../src/scripts/excluir-dispositivo';
-import * as medirScript from '../../src/scripts/medir-dispositivo';
+import { esMac, principal as excluirDispositivo } from '../../src/scripts/excluir-dispositivo';
+import { medir, principal as medirDispositivo, veredicto } from '../../src/scripts/medir-dispositivo';
 import { opcionesConexion, principal as respaldar } from '../../src/scripts/respaldo-bd';
 import { principal as restaurar } from '../../src/scripts/restaurar-bd';
 
@@ -86,14 +86,14 @@ const registrarBase = () => {
 
 describe('dispositivo:excluir', () => {
     it('reconoce MAC en cualquier formato', () => {
-        expect(excluir.esMac('02005E100001')).toBe(true);
-        expect(excluir.esMac(MAC)).toBe(true);
-        expect(excluir.esMac('02:00:5e')).toBe(false);
+        expect(esMac('02005E100001')).toBe(true);
+        expect(esMac(MAC)).toBe(true);
+        expect(esMac('02:00:5e')).toBe(false);
     });
 
     it.each([[[]], [['no-mac']], [[MAC, '--otra']]])('muestra el uso con argumentos %j', async (argumentos) => {
         conArgumentos(...argumentos);
-        await excluir.principal();
+        await excluirDispositivo();
         expect(salida.join('')).toContain('Uso: npm run dispositivo:excluir');
         expect(process.exitCode).toBe(1);
     });
@@ -104,7 +104,7 @@ describe('dispositivo:excluir', () => {
         container.registerInstance(InfraestructuraRepository, repo as never);
         conArgumentos(MAC);
 
-        await excluir.principal();
+        await excluirDispositivo();
 
         const hash = container.resolve(MacAnonymizerService).hash(MAC);
         expect(repo.registrar).toHaveBeenCalledWith([{ macHash: hash, motivo: 'manual' }], expect.any(Date));
@@ -117,7 +117,7 @@ describe('dispositivo:excluir', () => {
         registrarBase();
         container.registerInstance(InfraestructuraRepository, { eliminar: vi.fn(() => Promise.resolve(habia)) } as never);
         conArgumentos(MAC, '--quitar');
-        await excluir.principal();
+        await excluirDispositivo();
         expect(salida.join('')).toContain(mensaje);
     });
 
@@ -125,7 +125,7 @@ describe('dispositivo:excluir', () => {
         const db = registrarBase();
         container.registerInstance(InfraestructuraRepository, { registrar: vi.fn(() => Promise.reject(new Error('bd'))) } as never);
         conArgumentos(MAC);
-        await expect(excluir.principal()).rejects.toThrow('bd');
+        await expect(excluirDispositivo()).rejects.toThrow('bd');
         expect(db.dataSource.destroy).toHaveBeenCalledOnce();
     });
 });
@@ -144,21 +144,21 @@ describe('dispositivo:medir', () => {
     };
 
     it('explica cada veredicto', () => {
-        expect(medirScript.veredicto(true, false, [], -75)).toBe('PRESENTE');
-        expect(medirScript.veredicto(false, true, [], -75)).toBe('EXCLUIDO como infraestructura');
-        expect(medirScript.veredicto(false, false, ['n3'], -75)).toBe('FUERA: no lo oye n3');
-        expect(medirScript.veredicto(false, false, [], -75)).toBe('FUERA: el nodo más débil no llega a -75 dBm');
+        expect(veredicto(true, false, [], -75)).toBe('PRESENTE');
+        expect(veredicto(false, true, [], -75)).toBe('EXCLUIDO como infraestructura');
+        expect(veredicto(false, false, ['n3'], -75)).toBe('FUERA: no lo oye n3');
+        expect(veredicto(false, false, [], -75)).toBe('FUERA: el nodo más débil no llega a -75 dBm');
     });
 
     it('avisa si ningún nodo lo ha oído', async () => {
         preparar(() => [senal('otro', 'n1', -50)]);
-        await medirScript.medir(hash());
+        await medir(hash());
         expect(salida.join('')).toContain('ningún nodo lo ha oído en los últimos 30 s');
     });
 
     it('muestra la señal por nodo y si cuenta como presente', async () => {
         preparar((huella) => [senal(huella, 'n1', -60.4), senal(huella, 'n2', -70), senal('otro', 'n3', -50)]);
-        await medirScript.medir(hash());
+        await medir(hash());
         const linea = salida.join('');
         expect(linea).toContain('n1  -60');
         expect(linea).toContain('n3   —');
@@ -167,13 +167,13 @@ describe('dispositivo:medir', () => {
 
     it('reconoce un dispositivo presente', async () => {
         preparar((huella) => [senal(huella, 'n1', -60), senal(huella, 'n2', -65)]);
-        await medirScript.medir(hash());
+        await medir(hash());
         expect(salida.join('')).toContain('| PRESENTE');
     });
 
     it('rechaza una MAC inválida', async () => {
         conArgumentos('xx');
-        await medirScript.principal();
+        await medirDispositivo();
         expect(salida.join('')).toContain('Uso: npm run dispositivo:medir');
         expect(process.exitCode).toBe(1);
     });
@@ -189,7 +189,7 @@ describe('dispositivo:medir', () => {
         vi.spyOn(process, 'once').mockImplementation(((evento: string, fn: () => void) => { if (evento === 'SIGINT') parar = fn; return process; }) as never);
         conArgumentos(MAC);
 
-        const ejecucion = medirScript.principal();
+        const ejecucion = medirDispositivo();
         await vi.advanceTimersByTimeAsync(0);
         await vi.advanceTimersByTimeAsync(5_000);
         parar();

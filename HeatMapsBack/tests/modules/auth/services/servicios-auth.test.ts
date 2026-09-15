@@ -48,14 +48,17 @@ describe('JwtService', () => {
     });
 });
 
+/** Contraseña ficticia de prueba; no es una credencial real. */
+const CLAVE_DE_PRUEBA = 'Contraseña-Segura-1'; // skipcq: SCT-A000
+
 describe('PasswordService', () => {
     const servicio = new PasswordService();
 
     it('no guarda la contraseña en claro y la verifica', async () => {
-        const hash = await servicio.hash('Contraseña-Segura-1');
-        expect(hash).not.toContain('Contraseña-Segura-1');
+        const hash = await servicio.hash(CLAVE_DE_PRUEBA);
+        expect(hash).not.toContain(CLAVE_DE_PRUEBA);
         expect(hash.startsWith('$2')).toBe(true);
-        await expect(servicio.verify('Contraseña-Segura-1', hash)).resolves.toBe(true);
+        await expect(servicio.verify(CLAVE_DE_PRUEBA, hash)).resolves.toBe(true);
     });
 
     it('rechaza una contraseña distinta', async () => {

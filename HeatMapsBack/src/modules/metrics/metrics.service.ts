@@ -1,6 +1,7 @@
 import { injectable } from 'tsyringe';
 import { SensingConfig } from '../../config/sensing.config';
 import { Alerta } from '../../models/Alerta.entity';
+import type { Sensor } from '../../models/Sensor.entity';
 import { NotFoundError } from '../../common/errors';
 import { AlertaRepository } from '../sensor/repositories/alerta.repository';
 import { CapturaRepository } from '../sensor/repositories/captura.repository';
@@ -28,6 +29,37 @@ const LIVE_WINDOW_MINUTES = 5;
 
 /** Resumen reciente del panel, compartido entre peticiones (ver `mapasRecientes`). */
 const resumenReciente = crearCacheTemporal<MetricsOverview>(1_000);
+
+/** Ocupación que se asume en una zona que todavía no tiene ninguna ventana consolidada. */
+const SIN_CONSOLIDAR = {
+    dispositivosUnicos: 0,
+    dispositivosEstables: 0,
+    rssiPromedio: null,
+    nivelOcupacion: 'baja',
+    intervaloFin: null,
+} as const;
+
+/** Ocupación sobre el aforo con un decimal, o `null` si la zona no declara aforo. */
+const porcentajeDeAforo = (unicos: number, capacidad: number | null): number | null =>
+    capacidad ? Math.round((unicos / capacidad) * 1000) / 10 : null;
+
+/** Minutos completos transcurridos desde `fecha`, o `null` si nunca ocurrió. */
+const minutosDesde = (fecha: Date | null, ahora: number): number | null =>
+    fecha === null ? null : Math.floor((ahora - fecha.getTime()) / 60_000);
+
+/** Salud de un nodo a partir de su registro y del momento de la consulta. */
+const saludDe = (sensor: Sensor, ahora: number): SensorHealth => {
+    const minutos = minutosDesde(sensor.ultimaConexion, ahora);
+    return {
+        idSensor: sensor.idSensor,
+        nombre: sensor.nombre,
+        zona: sensor.zona?.nombre ?? null,
+        estado: sensor.estado,
+        ultimaConexion: sensor.ultimaConexion === null ? null : sensor.ultimaConexion.toISOString(),
+        minutosDesdeUltimaLectura: minutos,
+        enLinea: (minutos ?? Infinity) < SENSOR_ONLINE_WINDOW_MINUTES,
+    };
+};
 
 /** Tope de horas que se pueden pedir en una serie temporal. */
 const MAX_SERIES_HOURS = 168;
@@ -113,21 +145,18 @@ export class MetricsService {
         const porZona = new Map(ultimas.map((ocupacion) => [ocupacion.idZona, ocupacion]));
 
         return zonas.map((zona) => {
-            const ultima = porZona.get(zona.idZona);
-            const unicos = ultima?.dispositivosUnicos ?? 0;
+            const ultima = porZona.get(zona.idZona) ?? SIN_CONSOLIDAR;
 
             return {
                 idZona: zona.idZona,
                 nombre: zona.nombre,
                 capacidadMax: zona.capacidadMax,
-                dispositivosUnicos: unicos,
-                dispositivosEstables: ultima?.dispositivosEstables ?? 0,
-                rssiPromedio: ultima?.rssiPromedio ?? null,
-                nivelOcupacion: ultima?.nivelOcupacion ?? 'baja',
-                porcentajeAforo: zona.capacidadMax
-                    ? Math.round((unicos / zona.capacidadMax) * 1000) / 10
-                    : null,
-                actualizadoEn: ultima?.intervaloFin.toISOString() ?? null,
+                dispositivosUnicos: ultima.dispositivosUnicos,
+                dispositivosEstables: ultima.dispositivosEstables,
+                rssiPromedio: ultima.rssiPromedio,
+                nivelOcupacion: ultima.nivelOcupacion,
+                porcentajeAforo: porcentajeDeAforo(ultima.dispositivosUnicos, zona.capacidadMax),
+                actualizadoEn: ultima.intervaloFin?.toISOString() ?? null,
             };
         });
     }
@@ -159,22 +188,7 @@ export class MetricsService {
         const sensores = await this.sensores.findAll();
         const now = Date.now();
 
-        return sensores.map((sensor) => {
-            const minutos =
-                sensor.ultimaConexion === null
-                    ? null
-                    : Math.floor((now - sensor.ultimaConexion.getTime()) / 60_000);
-
-            return {
-                idSensor: sensor.idSensor,
-                nombre: sensor.nombre,
-                zona: sensor.zona?.nombre ?? null,
-                estado: sensor.estado,
-                ultimaConexion: sensor.ultimaConexion?.toISOString() ?? null,
-                minutosDesdeUltimaLectura: minutos,
-                enLinea: minutos !== null && minutos < SENSOR_ONLINE_WINDOW_MINUTES,
-            };
-        });
+        return sensores.map((sensor) => saludDe(sensor, now));
     }
 
     /** Alertas de aglomeración abiertas. */

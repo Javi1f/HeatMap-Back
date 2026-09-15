@@ -2,6 +2,13 @@ import { NextFunction, Request, Response } from 'express';
 import { container } from 'tsyringe';
 import { ForbiddenError, UnauthorizedError } from '../common/errors';
 import { AdminRepository } from '../modules/auth/repositories/admin.repository';
+import type { Admin } from '../models/Admin.entity';
+
+/** Lanza si la cuenta no existe, está desactivada o no tiene el rol `root`. */
+const exigirRootActivo = (admin: Admin | null): void => {
+    if (!admin?.activo) throw new UnauthorizedError('La cuenta está desactivada');
+    if (admin.rol !== 'root') throw new ForbiddenError('Esta acción requiere el rol root');
+};
 
 /**
  * Exige que el administrador autenticado tenga el rol `root` y esté activo.
@@ -14,9 +21,7 @@ export const requireRoot = async (req: Request, _res: Response, next: NextFuncti
     try {
         if (!req.admin) throw new UnauthorizedError();
 
-        const admin = await container.resolve(AdminRepository).findById(req.admin.id);
-        if (!admin?.activo) throw new UnauthorizedError('La cuenta está desactivada');
-        if (admin.rol !== 'root') throw new ForbiddenError('Esta acción requiere el rol root');
+        exigirRootActivo(await container.resolve(AdminRepository).findById(req.admin.id));
 
         next();
     } catch (err) {
