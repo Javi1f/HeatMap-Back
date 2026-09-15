@@ -124,7 +124,7 @@ export class OccupancyAggregatorService {
             return;
         }
 
-        const zonas = new Map((await this.zonas.findAll()).map((z) => [z.idZona, z]));
+        const zonas = new Map((await this.zonas.findAll()).map((zona) => [zona.idZona, zona]));
 
         const filas: OcupacionInsert[] = conteos.map((conteo) => ({
             idZona: conteo.idZona,
@@ -154,15 +154,15 @@ export class OccupancyAggregatorService {
      * de aglomeración es preferible avisar de más que de menos.
      */
     private classify(conteo: ConteoZona, zona?: Zona): NivelOcupacion {
-        const n = conteo.dispositivosUnicos;
+        const cantidad = conteo.dispositivosUnicos;
 
         if (!zona?.capacidadMax) {
-            if (n >= UMBRAL_ABSOLUTO_ALTA) return 'alta';
-            if (n >= UMBRAL_ABSOLUTO_MEDIA) return 'media';
+            if (cantidad >= UMBRAL_ABSOLUTO_ALTA) return 'alta';
+            if (cantidad >= UMBRAL_ABSOLUTO_MEDIA) return 'media';
             return 'baja';
         }
 
-        const ratio = n / zona.capacidadMax;
+        const ratio = cantidad / zona.capacidadMax;
         if (ratio >= this.cfg.occupancyHighRatio) return 'alta';
         if (ratio >= this.cfg.occupancyMediumRatio) return 'media';
         return 'baja';
@@ -180,12 +180,15 @@ export class OccupancyAggregatorService {
         zonas: Map<string, Zona>,
         conteos: ConteoZona[],
     ): Promise<void> {
-        const porZona = new Map(conteos.map((c) => [c.idZona, c]));
+        const porZona = new Map(conteos.map((conteo) => [conteo.idZona, conteo]));
 
-        for (const fila of filas) {
-            if (fila.nivelOcupacion !== 'alta') continue;
-            if (await this.alertas.hasOpenForZone(fila.idZona)) continue;
+        // Cada zona es independiente de las demás, así que las comprobaciones y
+        // las altas se lanzan a la vez en lugar de una detrás de otra.
+        const altas = filas.filter((fila) => fila.nivelOcupacion === 'alta');
+        const yaAbiertas = await Promise.all(altas.map((fila) => this.alertas.hasOpenForZone(fila.idZona)));
+        const nuevas = altas.filter((_fila, indice) => !yaAbiertas[indice]);
 
+        await Promise.all(nuevas.map(async (fila) => {
             const zona = zonas.get(fila.idZona);
             const detectados = porZona.get(fila.idZona)?.dispositivosUnicos ?? 0;
             const aforo = zona?.capacidadMax ? ` sobre un aforo de ${zona.capacidadMax}` : '';
@@ -196,7 +199,7 @@ export class OccupancyAggregatorService {
                 `Ocupación alta en ${zona?.nombre ?? 'zona desconocida'}: ${detectados} dispositivos detectados${aforo}.`,
             );
             this.logger.warn(`Alerta de aglomeración levantada en zona ${fila.idZona}`);
-        }
+        }));
     }
 
     /**

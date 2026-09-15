@@ -72,14 +72,16 @@ export class LoggerService implements ILogger {
     private readonly sinks: Record<LogLevel, Sink>;
 
     constructor() {
+        /** Destino que descarta la línea: sustituye a DEBUG en producción. */
         const noop: Sink = () => {
             /* DEBUG silenciado en producción */
         };
+        // Este servicio es el único punto de la aplicación que escribe en consola.
         this.sinks = {
-            [LogLevel.ERROR]: console.error.bind(console),
-            [LogLevel.WARN]: console.warn.bind(console),
-            [LogLevel.INFO]: console.log.bind(console),
-            [LogLevel.DEBUG]: this.isDevelopment ? console.debug.bind(console) : noop,
+            [LogLevel.ERROR]: console.error.bind(console), // skipcq: JS-0002
+            [LogLevel.WARN]: console.warn.bind(console), // skipcq: JS-0002
+            [LogLevel.INFO]: console.log.bind(console), // skipcq: JS-0002
+            [LogLevel.DEBUG]: this.isDevelopment ? console.debug.bind(console) : noop, // skipcq: JS-0002
         };
     }
 

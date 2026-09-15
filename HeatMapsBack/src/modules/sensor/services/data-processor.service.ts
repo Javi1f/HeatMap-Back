@@ -13,6 +13,16 @@ import { MacAnonymizerService } from './mac-anonymizer.service';
 const UNKNOWN_CHANNEL = 0;
 
 /**
+ * Intervalo mínimo entre dos actualizaciones de la última conexión de un nodo.
+ *
+ * Un nodo publica cada pocos segundos y escribir la marca en cada mensaje
+ * añadía una consulta por lectura, justo en el camino que tiene que seguir el
+ * ritmo de los nodos. El panel considera caído un nodo tras 3 minutos, así que
+ * 30 s de resolución sobran.
+ */
+const TOQUE_MINIMO_MS = 30_000;
+
+/**
  * Persiste las lecturas que llegan por Kafka.
  *
  * Por cada lectura:
@@ -37,6 +47,9 @@ export class DataProcessorService {
      * generaría miles de SELECT redundantes al día.
      */
     private readonly knownSensors = new Set<string>();
+
+    /** Última actualización de `ultimaConexion` de cada nodo, en milisegundos. */
+    private readonly ultimoToque = new Map<string, number>();
 
     constructor(
         private readonly capturas: CapturaRepository,
@@ -112,6 +125,9 @@ export class DataProcessorService {
             }
             this.knownSensors.add(idSensor);
         }
+        const ahora = Date.now();
+        if (ahora - (this.ultimoToque.get(idSensor) ?? 0) < TOQUE_MINIMO_MS) return;
+        this.ultimoToque.set(idSensor, ahora);
         await this.sensores.touch(idSensor, seenAt);
     }
 }

@@ -42,7 +42,7 @@ export class AllowedEmailsService {
      */
     async getAll(): Promise<AllowedEmailView[]> {
         const records = await this.repo.findAll();
-        return records.map((r) => this.toView(r));
+        return records.map((registro) => this.toView(registro));
     }
 
     /**
@@ -80,7 +80,7 @@ export class AllowedEmailsService {
     async isAllowed(email: string): Promise<boolean> {
         const emailHash = this.cipher.hash(email);
         const found = await this.repo.findByEmailHash(emailHash);
-        return !!found;
+        return found !== null;
     }
 
     /**

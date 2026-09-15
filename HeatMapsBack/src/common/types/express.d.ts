@@ -13,6 +13,7 @@ import { JwtPayload } from '../../types/auth.types';
  * lo incluya en la compilación (está dentro de `src/`).
  */
 declare module 'express-serve-static-core' {
+    /** Petición de Express con los datos que añaden los middlewares propios. */
     interface Request {
         /**
          * Payload del JWT del administrador autenticado. Solo presente cuando

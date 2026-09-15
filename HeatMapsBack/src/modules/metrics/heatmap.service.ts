@@ -9,12 +9,24 @@ import {
     PositioningService,
 } from '../sensor/services/positioning.service';
 import { PresenciaService } from '../sensor/services/presencia.service';
+import { crearCacheTemporal } from '../../common/utils/cache-temporal';
 
 /** Lado de cada celda de la rejilla, en metros. */
 const LADO_CELDA_M = 0.5;
 
 /** Ventana por defecto que abarca el mapa, en minutos. */
 const VENTANA_POR_DEFECTO_MIN = 5;
+
+/**
+ * Mapas recientes, compartidos entre peticiones.
+ *
+ * La interfaz recarga el mapa hasta cada 2 s al llegar lecturas para cumplir
+ * el tiempo de respuesta de 5 s, y con varios visitantes eso serían varias
+ * consultas pesadas por segundo con el mismo resultado. Un segundo de caché
+ * deja como mucho una consulta por segundo por zona, haya los visitantes que
+ * haya, y suma a lo sumo 1 s al tiempo de reflejo.
+ */
+const mapasRecientes = crearCacheTemporal<MapaDeCalor>(1_000);
 
 /** Ventana máxima admitida, en minutos. */
 const VENTANA_MAXIMA_MIN = 120;
@@ -138,7 +150,7 @@ const leerGeometria = (coordenadas: Record<string, unknown> | null): Limites | n
 };
 
 /** Restringe un valor al rango indicado, ambos extremos incluidos. */
-const acotar = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);
+const acotar = (valor: number, min: number, max: number): number => Math.min(Math.max(valor, min), max);
 
 /**
  * Construye mapas de calor de ocupación a partir de las detecciones crudas.
@@ -172,7 +184,12 @@ export class HeatmapService {
      * @throws NotFoundError   si la zona no existe.
      * @throws ValidationError si la zona no tiene geometría definida.
      */
-    async generar(idZona: string, minutos = VENTANA_POR_DEFECTO_MIN): Promise<MapaDeCalor> {
+    generar(idZona: string, minutos = VENTANA_POR_DEFECTO_MIN): Promise<MapaDeCalor> {
+        return mapasRecientes.obtener(`${idZona}:${minutos}`, () => this.calcular(idZona, minutos));
+    }
+
+    /** Calcula el mapa sin pasar por la caché. */
+    private async calcular(idZona: string, minutos: number): Promise<MapaDeCalor> {
         const zona = await this.zonas.findById(idZona);
         if (!zona) throw new NotFoundError('La zona no existe');
 
@@ -200,15 +217,15 @@ export class HeatmapService {
             leerAjusteVertical(zona.coordenadas),
         );
 
-        const nodosConDatos = new Set(lecturas.map((l) => l.idSensor));
+        const nodosConDatos = new Set(lecturas.map((lectura) => lectura.idSensor));
         const nodos = (await this.sensores.findAll())
-            .filter((s) => s.idZona === idZona && s.posX !== null && s.posY !== null)
-            .map((s) => ({
-                idSensor: s.idSensor,
-                nombre: s.nombre,
-                x: s.posX as number,
-                y: s.posY as number,
-                aportoDatos: nodosConDatos.has(s.idSensor),
+            .filter((sensor) => sensor.idZona === idZona && sensor.posX !== null && sensor.posY !== null)
+            .map((sensor) => ({
+                idSensor: sensor.idSensor,
+                nombre: sensor.nombre,
+                x: sensor.posX as number,
+                y: sensor.posY as number,
+                aportoDatos: nodosConDatos.has(sensor.idSensor),
             }));
 
         return {
@@ -249,10 +266,10 @@ export class HeatmapService {
 
         // Agrupar por dispositivo: cada uno aporta una observación por nodo.
         const porDispositivo = new Map<string, Observacion[]>();
-        for (const l of lecturas) {
-            const obs = porDispositivo.get(l.macHash) ?? [];
-            obs.push({ x: l.posX, y: l.posY, d: l.distancia });
-            porDispositivo.set(l.macHash, obs);
+        for (const lectura of lecturas) {
+            const obs = porDispositivo.get(lectura.macHash) ?? [];
+            obs.push({ x: lectura.posX, y: lectura.posY, d: lectura.distancia });
+            porDispositivo.set(lectura.macHash, obs);
         }
 
         let maximo = 0;

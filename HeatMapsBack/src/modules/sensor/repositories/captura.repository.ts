@@ -136,12 +136,12 @@ export class CapturaRepository {
                 distancia: string;
             }>();
 
-        return filas.map((f) => ({
-            macHash: f.macHash,
-            idSensor: f.idSensor,
-            posX: Number(f.posX),
-            posY: Number(f.posY),
-            distancia: Number(f.distancia),
+        return filas.map((fila) => ({
+            macHash: fila.macHash,
+            idSensor: fila.idSensor,
+            posX: Number(fila.posX),
+            posY: Number(fila.posY),
+            distancia: Number(fila.distancia),
         }));
     }
 
@@ -176,12 +176,12 @@ export class CapturaRepository {
             .addGroupBy('c.idSensor')
             .getRawMany<{ idZona: string; macHash: string; idSensor: string; rssi: string; esMacRandom: string | number }>();
 
-        return filas.map((f) => ({
-            idZona: f.idZona,
-            macHash: f.macHash,
-            idSensor: f.idSensor,
-            rssi: Number(f.rssi),
-            esMacRandom: Number(f.esMacRandom) === 1,
+        return filas.map((fila) => ({
+            idZona: fila.idZona,
+            macHash: fila.macHash,
+            idSensor: fila.idSensor,
+            rssi: Number(fila.rssi),
+            esMacRandom: Number(fila.esMacRandom) === 1,
         }));
     }
 

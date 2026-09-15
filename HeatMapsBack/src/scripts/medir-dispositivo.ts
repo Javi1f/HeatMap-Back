@@ -41,7 +41,7 @@ const hora = (): string => new Date().toTimeString().slice(0, 8);
  *
  * @param sordos - Nodos que emitieron pero no lo oyeron.
  */
-const veredicto = (presente: boolean, excluido: boolean, sordos: readonly string[], umbral: number): string => {
+export const veredicto = (presente: boolean, excluido: boolean, sordos: readonly string[], umbral: number): string => {
     if (presente) return 'PRESENTE';
     if (excluido) return 'EXCLUIDO como infraestructura';
     if (sordos.length > 0) return `FUERA: no lo oye ${sordos.join(', ')}`;
@@ -53,7 +53,7 @@ const columna = (nodo: string, rssi: number | undefined): string =>
     `${nodo} ${rssi === undefined ? '  —' : Math.round(rssi).toString().padStart(4)}`;
 
 /** Realiza una medición y la imprime. */
-const medir = async (macHash: string): Promise<void> => {
+export const medir = async (macHash: string): Promise<void> => {
     const capturas = container.resolve(CapturaRepository);
     const infraestructura = container.resolve(InfraestructuraRepository);
     const cfg = container.resolve(SensingConfig);
@@ -93,7 +93,7 @@ const medir = async (macHash: string): Promise<void> => {
  * manejador de señal: así la condición del bucle refleja un estado que otro
  * código puede cambiar, en lugar de una variable que el bucle nunca toca.
  */
-const principal = async (): Promise<void> => {
+export const principal = async (): Promise<void> => {
     const mac = process.argv[2] ?? '';
     const anonimizador = container.resolve(MacAnonymizerService);
     if (mac.toLowerCase().replace(/[^0-9a-f]/g, '').length !== 12) {
@@ -111,14 +111,19 @@ const principal = async (): Promise<void> => {
     const parada = new AbortController();
     process.once('SIGINT', () => parada.abort());
 
+    // Las mediciones son secuenciales a propósito: cada una espera a la anterior.
     while (!parada.signal.aborted) {
-        await medir(macHash);
-        await new Promise((resolver) => setTimeout(resolver, PAUSA_MS));
+        await medir(macHash); // skipcq: JS-0032
+        await new Promise((resolver) => { // skipcq: JS-0032
+            setTimeout(resolver, PAUSA_MS);
+        });
     }
     await db.dataSource.destroy();
 };
 
-principal().catch((err: unknown) => {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exitCode = 1;
-});
+if (require.main === module) {
+    principal().catch((err: unknown) => {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exitCode = 1;
+    });
+}

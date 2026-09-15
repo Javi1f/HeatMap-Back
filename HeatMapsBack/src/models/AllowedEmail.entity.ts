@@ -24,8 +24,9 @@ export class AllowedEmail {
     @Column({ name: 'email', type: 'text' })
     email: string;
 
-    /** HMAC del correo normalizado, para comprobar pertenencia sin descifrar. */
-    /*
+    /**
+     * HMAC del correo normalizado, para comprobar pertenencia sin descifrar.
+     *
      * Sin `@Index()`: una columna `unique` ya trae su propio índice. Declarar
      * ambos hace que TypeORM emita dos índices con el mismo nombre generado
      * —uno normal y otro único— y MySQL rechaza el CREATE TABLE con

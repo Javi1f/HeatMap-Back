@@ -3,6 +3,8 @@ import { AdminRepository } from '../auth/repositories/admin.repository';
 import { SessionService } from '../auth/services/session.service';
 import { DbFieldCipher } from '../../crypto/db-field.crypto';
 import { NotFoundError } from '../../common/errors';
+import type { RolAdmin } from '../../models/Admin.entity';
+import { validarCambioActivo, validarCambioRol } from './reglas-roles';
 
 /** Administrador tal como se muestra en el panel de gestión de usuarios. */
 export interface AdminSummary {
@@ -23,6 +25,12 @@ export interface AdminSummary {
 
     /** `true` si el administrador tiene al menos una sesión viva. */
     conSesionActiva: boolean;
+
+    /** Rol de la cuenta. */
+    rol: RolAdmin;
+
+    /** `false` si la cuenta está desactivada. */
+    activo: boolean;
 }
 
 /** Sesión tal como se muestra en el panel. */
@@ -73,7 +81,7 @@ export class UsersService {
             this.sessions.listActive(),
         ]);
 
-        const conSesion = new Set(activeSessions.map((s) => s.idAdmin));
+        const conSesion = new Set(activeSessions.map((sesion) => sesion.idAdmin));
 
         return admins.map((admin) => ({
             id: admin.id,
@@ -82,6 +90,8 @@ export class UsersService {
             isVerified: admin.isVerified,
             createdAt: admin.createdAt.toISOString(),
             conSesionActiva: conSesion.has(admin.id),
+            rol: admin.rol,
+            activo: admin.activo,
         }));
     }
 
@@ -95,18 +105,18 @@ export class UsersService {
         ]);
 
         const nombres = new Map(
-            admins.map((a) => [a.id, this.cipher.decrypt(a.username)] as const),
+            admins.map((admin) => [admin.id, this.cipher.decrypt(admin.username)] as const),
         );
         const currentHash = currentToken ? this.sessions.fingerprint(currentToken) : null;
 
-        return sesiones.map((s) => ({
-            idSesion: s.idSesion,
-            idAdmin: s.idAdmin,
-            username: nombres.get(s.idAdmin) ?? null,
-            ipOrigen: s.ipOrigen,
-            fechaInicio: s.fechaInicio.toISOString(),
-            fechaExpiracion: s.fechaExpiracion.toISOString(),
-            esActual: currentHash !== null && s.tokenHash === currentHash,
+        return sesiones.map((sesion) => ({
+            idSesion: sesion.idSesion,
+            idAdmin: sesion.idAdmin,
+            username: nombres.get(sesion.idAdmin) ?? null,
+            ipOrigen: sesion.ipOrigen,
+            fechaInicio: sesion.fechaInicio.toISOString(),
+            fechaExpiracion: sesion.fechaExpiracion.toISOString(),
+            esActual: currentHash !== null && sesion.tokenHash === currentHash,
         }));
     }
 
@@ -118,5 +128,29 @@ export class UsersService {
     async revokeSession(idSesion: string): Promise<void> {
         const ok = await this.sessions.revoke(idSesion);
         if (!ok) throw new NotFoundError('La sesión no existe o ya estaba cerrada');
+    }
+
+    /**
+     * Cambia el rol de un administrador.
+     *
+     * @throws NotFoundError si no existe.
+     * @throws ConflictError si dejaría el sistema sin un `root` activo.
+     */
+    async cambiarRol(idObjetivo: number, rol: RolAdmin): Promise<void> {
+        validarCambioRol(await this.admins.findAll(), idObjetivo, rol);
+        await this.admins.actualizar(idObjetivo, { rol });
+    }
+
+    /**
+     * Activa o desactiva una cuenta. Desactivarla revoca de inmediato todas
+     * sus sesiones: si no, conservaría el acceso hasta que caducara su token.
+     *
+     * @throws NotFoundError si no existe.
+     * @throws ConflictError si se desactiva a sí mismo o al último `root` activo.
+     */
+    async cambiarActivo(idSolicitante: number, idObjetivo: number, activo: boolean): Promise<void> {
+        validarCambioActivo(await this.admins.findAll(), idSolicitante, idObjetivo, activo);
+        await this.admins.actualizar(idObjetivo, { activo });
+        if (!activo) await this.sessions.revokeAllFor(idObjetivo);
     }
 }

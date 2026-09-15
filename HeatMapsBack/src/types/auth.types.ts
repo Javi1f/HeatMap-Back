@@ -1,3 +1,4 @@
+import type { RolAdmin } from '../models/Admin.entity';
 /**
  * Tipos de dominio para autenticación.
  *
@@ -21,4 +22,7 @@ export interface JwtPayload {
 
     /** Correo ya descifrado. */
     email: string;
+
+    /** Rol al emitir el token. Informativo: los permisos se comprueban contra la base de datos. */
+    rol?: RolAdmin;
 }

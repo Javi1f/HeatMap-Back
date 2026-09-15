@@ -50,6 +50,16 @@ export class SesionAuthRepository {
         return (result.affected ?? 0) > 0;
     }
 
+    /**
+     * Revoca todas las sesiones abiertas de un administrador.
+     *
+     * @returns Número de sesiones revocadas.
+     */
+    async revokeAllForAdmin(idAdmin: number): Promise<number> {
+        const result = await this.repo.update({ idAdmin, revocada: false }, { revocada: true });
+        return result.affected ?? 0;
+    }
+
     /** Revoca la sesion asociada a un token. Idempotente. */
     async revokeByTokenHash(tokenHash: string): Promise<void> {
         await this.repo.update({ tokenHash }, { revocada: true });

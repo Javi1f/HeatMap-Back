@@ -30,8 +30,9 @@ export class PendingRegistration {
     @Column({ name: 'username', type: 'text' })
     username: string;
 
-    /** HMAC del username normalizado, para buscar sin descifrar. */
-    /*
+    /**
+     * HMAC del username normalizado, para buscar sin descifrar.
+     *
      * Sin `@Index()`: una columna `unique` ya trae su propio índice. Declarar
      * ambos hace que TypeORM emita dos índices con el mismo nombre generado
      * —uno normal y otro único— y MySQL rechaza el CREATE TABLE con
@@ -44,8 +45,9 @@ export class PendingRegistration {
     @Column({ name: 'email', type: 'text' })
     email: string;
 
-    /** HMAC del correo normalizado, para buscar sin descifrar. */
-    /*
+    /**
+     * HMAC del correo normalizado, para buscar sin descifrar.
+     *
      * Sin `@Index()`: una columna `unique` ya trae su propio índice. Declarar
      * ambos hace que TypeORM emita dos índices con el mismo nombre generado
      * —uno normal y otro único— y MySQL rechaza el CREATE TABLE con

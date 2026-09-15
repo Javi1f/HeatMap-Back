@@ -1,5 +1,5 @@
 import { injectable } from 'tsyringe';
-import { Admin } from '../../models/Admin.entity';
+import { Admin, RolAdmin } from '../../models/Admin.entity';
 import { PendingRegistration } from '../../models/PendingRegistration.entity';
 import { JwtPayload } from '../../types/auth.types';
 import { AdminRepository } from './repositories/admin.repository';
@@ -19,6 +19,7 @@ import {
     InvalidVerificationCodeError,
     NotFoundError,
     TooManyAttemptsError,
+    UnauthorizedError,
     VerificationCodeExpiredError,
 } from '../../common/errors';
 import { LoginDto } from './dto/login.dto';
@@ -38,6 +39,9 @@ export interface AdminView {
 
     /** Correo ya descifrado. */
     email: string;
+
+    /** Rol del administrador. */
+    rol: RolAdmin;
 }
 
 /** Resultado de un login o verificación exitosa. */
@@ -96,7 +100,9 @@ export class AuthService {
         if (!admin) throw new InvalidCredentialsError();
 
         const ok = await this.password.verify(dto.password, admin.password);
-        if (!ok) throw new InvalidCredentialsError();
+        // Una cuenta desactivada responde igual que una contraseña errónea:
+        // distinguirlas le diría a un atacante que la cuenta existe.
+        if (!ok || !admin.activo) throw new InvalidCredentialsError();
 
         const view = this.toView(admin);
         const token = await this.issueToken(view, ipOrigen);
@@ -231,6 +237,7 @@ export class AuthService {
             id: admin.id,
             username: this.cipher.decrypt(admin.username),
             email: this.cipher.decrypt(admin.email),
+            rol: admin.rol,
         };
     }
 
@@ -279,13 +286,18 @@ export class AuthService {
     }
 
     /**
-     * Cuerpo de respuesta para `GET /api/auth/session`. Devuelve el payload
-     * del admin autenticado con un flag explícito de validez.
+     * Cuerpo de respuesta para `GET /api/auth/session`. Devuelve los datos
+     * vigentes del admin autenticado con un flag explícito de validez.
+     *
+     * Se leen de la base de datos y no del token para que un cambio de rol o
+     * una desactivación se reflejen en la interfaz sin esperar a que caduque.
      *
      * @param admin - Payload del JWT verificado por el middleware.
      */
-    session(admin: JwtPayload): { admin: JwtPayload; isValid: true } {
+    async session(admin: JwtPayload): Promise<{ admin: AdminView; isValid: true }> {
         this.logger.debug(`Consulta de sesión admin id=${admin.id}`);
-        return { admin, isValid: true };
+        const actual = await this.adminRepo.findById(admin.id);
+        if (!actual?.activo) throw new UnauthorizedError('La cuenta está desactivada');
+        return { admin: this.toView(actual), isValid: true };
     }
 }

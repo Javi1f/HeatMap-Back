@@ -29,7 +29,7 @@ export const crearReporteSchema = z
         /** Zona a la que se acota. Omitida, el reporte abarca todas. */
         idZona: z.string().trim().min(1).max(36).optional(),
     })
-    .refine((d) => d.rangoFin > d.rangoInicio, {
+    .refine((datos) => datos.rangoFin > datos.rangoInicio, {
         message: 'rangoFin debe ser posterior a rangoInicio',
         path: ['rangoFin'],
     });

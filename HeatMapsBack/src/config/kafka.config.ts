@@ -31,7 +31,7 @@ export class KafkaConfig {
     private readonly _key: Buffer;
 
     constructor(env: EnvService) {
-        this.brokers = env.get('KAFKA_BOOTSTRAP_SERVERS').split(',').map((s) => s.trim());
+        this.brokers = env.get('KAFKA_BOOTSTRAP_SERVERS').split(',').map((broker) => broker.trim());
         this.topic = env.get('KAFKA_TOPIC').trim();
         this.groupId = env.get('KAFKA_GROUP_ID').trim();
         this.maxMessageAgeSeconds = env.get('KAFKA_MAX_MESSAGE_AGE_SECONDS');

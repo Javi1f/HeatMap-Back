@@ -57,16 +57,16 @@ export interface ReporteGenerado extends ReporteResumen {
  * la parte del módulo con reglas propias y merece cobertura directa.
  */
 export const aCsv = (valores: (string | number)[]): string =>
-    valores.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    valores.map((valor) => `"${String(valor).replace(/"/g, '""')}"`).join(',');
 
 /** Proyecta la entidad a la vista de listado. */
-const resumir = (r: Reporte): ReporteResumen => ({
-    idReporte: r.idReporte,
-    tipoReporte: r.tipoReporte,
-    zona: r.zona?.nombre ?? null,
-    rangoInicio: r.rangoInicio.toISOString(),
-    rangoFin: r.rangoFin.toISOString(),
-    fechaGeneracion: r.fechaGeneracion.toISOString(),
+const resumir = (registro: Reporte): ReporteResumen => ({
+    idReporte: registro.idReporte,
+    tipoReporte: registro.tipoReporte,
+    zona: registro.zona?.nombre ?? null,
+    rangoInicio: registro.rangoInicio.toISOString(),
+    rangoFin: registro.rangoFin.toISOString(),
+    fechaGeneracion: registro.fechaGeneracion.toISOString(),
 });
 
 /**
@@ -122,7 +122,7 @@ export class ReportesService {
     /** Definiciones guardadas, sin calcular sus datos. */
     async listar(): Promise<ReporteResumen[]> {
         const filas = await this.reportes.findAll();
-        return filas.map((r) => resumir(r));
+        return filas.map((registro) => resumir(registro));
     }
 
     /**
@@ -174,13 +174,13 @@ export class ReportesService {
     }
 
     /** Ejecuta la consulta que corresponde al tipo del reporte. */
-    private async calcular(r: Reporte): Promise<ReporteGenerado> {
-        const base = resumir(r);
+    private async calcular(registro: Reporte): Promise<ReporteGenerado> {
+        const base = resumir(registro);
         const { columnas, filas } = await this.datos(
-            r.tipoReporte as TipoReporte,
-            r.rangoInicio,
-            r.rangoFin,
-            r.idZona,
+            registro.tipoReporte as TipoReporte,
+            registro.rangoInicio,
+            registro.rangoFin,
+            registro.idZona,
         );
         return { ...base, columnas, filas, total: filas.length };
     }
@@ -208,13 +208,13 @@ export class ReportesService {
                     'Promedio estables',
                     'Ventanas en nivel alto',
                 ],
-                filas: resumen.map((z) => [
-                    z.nombre,
-                    z.ventanas,
-                    z.promedioUnicos,
-                    z.picoUnicos,
-                    z.promedioEstables,
-                    z.ventanasAltas,
+                filas: resumen.map((zona) => [
+                    zona.nombre,
+                    zona.ventanas,
+                    zona.promedioUnicos,
+                    zona.picoUnicos,
+                    zona.promedioEstables,
+                    zona.ventanasAltas,
                 ]),
             };
         }
@@ -223,12 +223,12 @@ export class ReportesService {
             const alertas = await this.alertas.findByRange(inicio, fin, idZona);
             return {
                 columnas: ['Fecha', 'Zona', 'Nivel', 'Mensaje', 'Estado'],
-                filas: alertas.map((a) => [
-                    a.timestampAlerta.toISOString(),
-                    a.zona?.nombre ?? '—',
-                    a.nivel,
-                    a.mensaje,
-                    a.resuelta ? 'Resuelta' : 'Abierta',
+                filas: alertas.map((alerta) => [
+                    alerta.timestampAlerta.toISOString(),
+                    alerta.zona?.nombre ?? '—',
+                    alerta.nivel,
+                    alerta.mensaje,
+                    alerta.resuelta ? 'Resuelta' : 'Abierta',
                 ]),
             };
         }
@@ -236,13 +236,13 @@ export class ReportesService {
         const ventanas = await this.ocupacion.findByRange(inicio, fin, idZona);
         return {
             columnas: ['Inicio de ventana', 'Zona', 'Únicos', 'Estables', 'RSSI medio', 'Nivel'],
-            filas: ventanas.map((o) => [
-                o.intervaloInicio.toISOString(),
-                o.zona?.nombre ?? '—',
-                o.dispositivosUnicos,
-                o.dispositivosEstables,
-                o.rssiPromedio ?? '',
-                o.nivelOcupacion,
+            filas: ventanas.map((ocupacion) => [
+                ocupacion.intervaloInicio.toISOString(),
+                ocupacion.zona?.nombre ?? '—',
+                ocupacion.dispositivosUnicos,
+                ocupacion.dispositivosEstables,
+                ocupacion.rssiPromedio ?? '',
+                ocupacion.nivelOcupacion,
             ]),
         };
     }

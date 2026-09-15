@@ -20,6 +20,10 @@ export interface IAdminRepository {
     create(data: Partial<Admin>): Promise<Admin>;
     /** Devuelve todos los administradores, del más antiguo al más reciente. */
     findAll(): Promise<Admin[]>;
+    /** Busca por identificador. */
+    findById(id: number): Promise<Admin | null>;
+    /** Actualiza el rol o la activación de una cuenta. */
+    actualizar(id: number, cambios: Partial<Pick<Admin, 'rol' | 'activo'>>): Promise<void>;
 }
 
 /**
@@ -80,5 +84,15 @@ export class AdminRepository implements IAdminRepository {
      */
     findAll(): Promise<Admin[]> {
         return this.repo.find({ order: { id: 'ASC' } });
+    }
+
+    /** Busca un administrador por su identificador. */
+    findById(id: number): Promise<Admin | null> {
+        return this.repo.findOne({ where: { id } });
+    }
+
+    /** Actualiza el rol o la activación de una cuenta. */
+    async actualizar(id: number, cambios: Partial<Pick<Admin, 'rol' | 'activo'>>): Promise<void> {
+        await this.repo.update({ id }, cambios);
     }
 }
