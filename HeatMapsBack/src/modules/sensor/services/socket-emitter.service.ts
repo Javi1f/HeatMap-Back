@@ -103,7 +103,9 @@ export class SocketEmitterService {
     async close(): Promise<void> {
         const server = this.io;
         if (!server) return;
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await new Promise<void>((resolve) => {
+            server.close(() => resolve());
+        });
         this.io = null;
     }
 }

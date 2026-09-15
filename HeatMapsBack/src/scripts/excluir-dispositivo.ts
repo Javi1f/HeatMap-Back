@@ -24,7 +24,7 @@ const escribir = (linea: string): void => {
 };
 
 /** Indica si el texto contiene exactamente los 12 dígitos de una MAC. */
-const esMac = (texto: string): boolean => texto.toLowerCase().replace(/[^0-9a-f]/g, '').length === 12;
+export const esMac = (texto: string): boolean => texto.toLowerCase().replace(/[^0-9a-f]/g, '').length === 12;
 
 /**
  * Registra o elimina la exclusión y comunica el resultado.
@@ -47,7 +47,7 @@ const aplicar = async (mac: string, quitar: boolean): Promise<void> => {
 };
 
 /** Punto de entrada: valida los argumentos y aplica la exclusión con la base abierta. */
-const principal = async (): Promise<void> => {
+export const principal = async (): Promise<void> => {
     const [mac = '', opcion] = process.argv.slice(2);
     const opcionValida = opcion === undefined || opcion === '--quitar';
     if (!esMac(mac) || !opcionValida) {
@@ -65,7 +65,9 @@ const principal = async (): Promise<void> => {
     }
 };
 
-principal().catch((err: unknown) => {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exitCode = 1;
-});
+if (require.main === module) {
+    principal().catch((err: unknown) => {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exitCode = 1;
+    });
+}

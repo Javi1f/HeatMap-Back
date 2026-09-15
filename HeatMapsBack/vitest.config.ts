@@ -9,7 +9,11 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'html'],
-            exclude: ['dist', 'node_modules', 'tests'],
+            // Se mide todo `src`, se haya importado en alguna prueba o no: sin
+            // `include`, un archivo que ninguna prueba toca no aparece en el
+            // informe y la cobertura parece mayor de lo que es.
+            include: ['src/**/*.ts'],
+            exclude: ['dist', 'node_modules', 'tests', 'src/**/*.d.ts'],
         },
     },
 });

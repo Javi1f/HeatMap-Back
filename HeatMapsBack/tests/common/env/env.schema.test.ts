@@ -43,3 +43,24 @@ describe('JWT_EXPIRES_IN', () => {
         }
     });
 });
+
+describe('Conversión de variables numéricas y booleanas', () => {
+    const exponente = envSchema.shape.PATH_LOSS_EXPONENT;
+    const sincronizar = envSchema.shape.DB_SYNCHRONIZE;
+
+    it('los decimales llegan como texto y se convierten, con valor por defecto si faltan', () => {
+        expect(exponente.parse('2.7')).toBe(2.7);
+        expect(exponente.parse(SIN_DEFINIR)).toBe(3);
+        expect(exponente.parse(2.5)).toBe(2.5);
+        expect(() => exponente.parse('')).toThrow();
+        expect(() => exponente.parse('mucho')).toThrow();
+    });
+
+    it('los booleanos sólo son verdaderos con «true», sin distinguir mayúsculas', () => {
+        expect(sincronizar.parse('TRUE')).toBe(true);
+        expect(sincronizar.parse('false')).toBe(false);
+        expect(sincronizar.parse('sí')).toBe(false);
+        expect(sincronizar.parse(true)).toBe(true);
+        expect(sincronizar.parse(SIN_DEFINIR)).toBe(false);
+    });
+});

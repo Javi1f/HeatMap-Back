@@ -95,19 +95,19 @@ const trilaterar = (obs: Observacion[]): Punto | null => {
  *
  * @returns El punto, o `null` si los dos nodos comparten posición.
  */
-const interseccion = (a: Observacion, b: Observacion): Punto | null => {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
+const interseccion = (primera: Observacion, segunda: Observacion): Punto | null => {
+    const dx = segunda.x - primera.x;
+    const dy = segunda.y - primera.y;
     const separacion = Math.hypot(dx, dy);
 
     if (separacion < DET_MINIMO) return null;
 
-    // Distancia desde `a` al pie de la recta que une los dos puntos de corte.
-    const avance = (a.d * a.d - b.d * b.d + separacion * separacion) / (2 * separacion);
+    // Distancia desde `primera` al pie de la recta que une los dos puntos de corte.
+    const avance = (primera.d * primera.d - segunda.d * segunda.d + separacion * separacion) / (2 * separacion);
 
     return {
-        x: a.x + (avance * dx) / separacion,
-        y: a.y + (avance * dy) / separacion,
+        x: primera.x + (avance * dx) / separacion,
+        y: primera.y + (avance * dy) / separacion,
     };
 };
 
@@ -128,10 +128,9 @@ const dentroDeLimites = (punto: Punto, limites: Limites): boolean =>
  *          solución cae fuera de la zona.
  */
 const estimar = (obs: Observacion[], limites: Limites): Punto | null => {
-    const punto =
-        obs.length >= 3 ? trilaterar(obs) :
-        obs.length === 2 ? interseccion(obs[0], obs[1]) :
-        null;
+    let punto: Punto | null = null;
+    if (obs.length >= 3) punto = trilaterar(obs);
+    else if (obs.length === 2) punto = interseccion(obs[0], obs[1]);
 
     if (!punto) return null;
     return dentroDeLimites(punto, limites) ? punto : null;

@@ -7,6 +7,7 @@ import { SesionAuth } from '../models/SesionAuth.entity';
 import { Zona } from '../models/Zona.entity';
 import { Sensor } from '../models/Sensor.entity';
 import { Captura } from '../models/Captura.entity';
+import { EventoAuditoria } from '../models/EventoAuditoria.entity';
 import { DispositivoInfraestructura } from '../models/DispositivoInfraestructura.entity';
 import { OcupacionAgregada } from '../models/OcupacionAgregada.entity';
 import { Alerta } from '../models/Alerta.entity';
@@ -35,7 +36,18 @@ export class DatabaseConfig {
     /** Conexion de TypeORM. Se obtiene solo a traves del contenedor DI. */
     public readonly dataSource: DataSource;
 
+    /**
+     * `true` si la conexión verifica el certificado del servidor.
+     *
+     * Siempre va cifrada con TLS; sin `DB_SSL_CA` se cifra sin comprobar quién
+     * responde, y `index.ts` lo advierte al arrancar.
+     */
+    public readonly verificaCertificado: boolean;
+
     constructor(env: EnvService) {
+        const ca = env.get('DB_SSL_CA');
+        this.verificaCertificado = Boolean(ca);
+
         this.dataSource = new DataSource({
             type: 'mysql',
             host: env.get('DB_HOST'),
@@ -57,10 +69,14 @@ export class DatabaseConfig {
                 OcupacionAgregada,
                 Alerta,
                 Reporte,
+                EventoAuditoria,
             ],
             migrations: [],
             subscribers: [],
             charset: 'utf8mb4',
+            ssl: ca
+                ? { ca: Buffer.from(ca, 'base64').toString('utf8'), rejectUnauthorized: true }
+                : { rejectUnauthorized: false },
             timezone: 'Z',
         });
     }

@@ -129,11 +129,11 @@ const despojar = (mapa: MapaDeCalor): MapaPublico => {
         maximo: mapa.maximo,
         situados: mapa.situados,
         sinPosicion: mapa.sinPosicion,
-        nodos: mapa.nodos.map((n) => ({
-            nombre: n.nombre,
-            x: n.x,
-            y: n.y,
-            aportoDatos: n.aportoDatos,
+        nodos: mapa.nodos.map((nodo) => ({
+            nombre: nodo.nombre,
+            x: nodo.x,
+            y: nodo.y,
+            aportoDatos: nodo.aportoDatos,
         })),
         ventanaMinutos: Math.round(ventanaMs / 60_000),
         hasta: mapa.hasta,
@@ -174,15 +174,15 @@ export class PublicoService {
             this.ocupacion.findLatestPerZone(),
         ]);
 
-        const nivelPorZona = new Map(ultimas.map((o) => [o.idZona, o.nivelOcupacion]));
+        const nivelPorZona = new Map(ultimas.map((ocupacion) => [ocupacion.idZona, ocupacion.nivelOcupacion]));
 
         return activas
-            .filter((z) => tieneGeometria(z.coordenadas))
-            .map((z) => ({
-                idZona: z.idZona,
-                nombre: z.nombre,
-                descripcion: z.descripcion,
-                nivelOcupacion: nivelPorZona.get(z.idZona) ?? 'sin datos',
+            .filter((zona) => tieneGeometria(zona.coordenadas))
+            .map((zona) => ({
+                idZona: zona.idZona,
+                nombre: zona.nombre,
+                descripcion: zona.descripcion,
+                nivelOcupacion: nivelPorZona.get(zona.idZona) ?? 'sin datos',
             }));
     }
 

@@ -17,7 +17,9 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "dispositivo:medir": "ts-node src/scripts/medir-dispositivo.ts",
-    "dispositivo:excluir": "ts-node src/scripts/excluir-dispositivo.ts"
+    "dispositivo:excluir": "ts-node src/scripts/excluir-dispositivo.ts",
+    "bd:respaldo": "ts-node src/scripts/respaldo-bd.ts",
+    "bd:restaurar": "ts-node src/scripts/restaurar-bd.ts"
   },
   "keywords": [],
   "author": "",

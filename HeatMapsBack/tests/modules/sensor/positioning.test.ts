@@ -26,8 +26,8 @@ const S2 = { x: 21, y: 0 };
 const S3 = { x: 10.5, y: 11.84 };
 
 /** Construye las observaciones exactas de un dispositivo situado en `p`. */
-const observar = (p: { x: number; y: number }, nodos = [S1, S2, S3]): Observacion[] =>
-    nodos.map((s) => ({ ...s, d: Math.hypot(p.x - s.x, p.y - s.y) }));
+const observar = (punto: { x: number; y: number }, nodos = [S1, S2, S3]): Observacion[] =>
+    nodos.map((nodo) => ({ ...nodo, d: Math.hypot(punto.x - nodo.x, punto.y - nodo.y) }));
 
 describe('PositioningService', () => {
     describe('con tres nodos y distancias exactas', () => {
@@ -54,7 +54,7 @@ describe('PositioningService', () => {
         it('mantiene el error acotado cuando las distancias se desvían', () => {
             const real = { x: 10.5, y: 5.92 };
             const ruido = [0.5, -0.4, 0.3];
-            const obs = observar(real).map((o, i) => ({ ...o, d: o.d + ruido[i] }));
+            const obs = observar(real).map((observacion, i) => ({ ...observacion, d: observacion.d + ruido[i] }));
 
             const punto = posicionador.estimar(obs, PLAZA);
             expect(punto).not.toBeNull();

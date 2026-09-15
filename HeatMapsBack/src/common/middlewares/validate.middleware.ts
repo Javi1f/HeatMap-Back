@@ -32,7 +32,9 @@ export const validate = <S extends ZodTypeAny>(
 ): RequestHandler => {
     return (req: Request, _res: Response, next: NextFunction): void => {
         const parsed = schema.parse(req[part]);
-        (req as unknown as Record<RequestPart, unknown>)[part] = parsed;
+        // En Express 5 `req.query` es un getter sin setter: asignarlo lanza un
+        // TypeError. Redefinir la propiedad funciona igual para las tres partes.
+        Object.defineProperty(req, part, { value: parsed, writable: true, configurable: true, enumerable: true });
         next();
     };
 };

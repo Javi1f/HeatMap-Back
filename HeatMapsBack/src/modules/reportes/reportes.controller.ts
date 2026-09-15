@@ -3,6 +3,7 @@ import { injectable } from 'tsyringe';
 import { UnauthorizedError } from '../../common/errors';
 import { CrearReporteDto, ReporteIdParam } from './dto/reporte.dto';
 import { ReportesService } from './reportes.service';
+import { AuditoriaService } from '../users/auditoria.service';
 
 /**
  * Controlador HTTP del módulo de reportes.
@@ -12,7 +13,10 @@ import { ReportesService } from './reportes.service';
  */
 @injectable()
 export class ReportesController {
-    constructor(private readonly service: ReportesService) {}
+    constructor(
+        private readonly service: ReportesService,
+        private readonly auditoria: AuditoriaService,
+    ) {}
 
     /**
      * `POST /api/reportes` — guarda una definición y devuelve su primer cálculo.
@@ -54,6 +58,7 @@ export class ReportesController {
     eliminar = async (req: Request, res: Response): Promise<void> => {
         const { id } = req.params as unknown as ReporteIdParam;
         await this.service.eliminar(id);
+        await this.auditoria.registrar({ tipo: 'reporte_eliminado', idAdmin: req.admin?.id, detalle: `reporte=${id}`, ip: req.ip });
         res.status(200).json({ success: true, message: 'Reporte eliminado' });
     };
 }

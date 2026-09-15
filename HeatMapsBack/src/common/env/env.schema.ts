@@ -31,7 +31,7 @@ const hexKey = (bytes: number) =>
  */
 const intFromString = (defaultValue?: number) => {
     const base = z.preprocess(
-        (v) => (typeof v === 'string' && v.length > 0 ? Number(v) : v),
+        (valor) => (typeof valor === 'string' && valor.length > 0 ? Number(valor) : valor),
         z.number().int(),
     );
     return defaultValue === undefined ? base : base.default(defaultValue);
@@ -44,7 +44,7 @@ const intFromString = (defaultValue?: number) => {
 const floatFromString = (defaultValue: number) =>
     z
         .preprocess(
-            (v) => (typeof v === 'string' && v.length > 0 ? Number(v) : v),
+            (valor) => (typeof valor === 'string' && valor.length > 0 ? Number(valor) : valor),
             z.number(),
         )
         .default(defaultValue);
@@ -55,7 +55,7 @@ const floatFromString = (defaultValue: number) =>
 const boolFromString = (defaultValue: boolean) =>
     z
         .preprocess(
-            (v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : v),
+            (valor) => (typeof valor === 'string' ? valor.toLowerCase() === 'true' : valor),
             z.boolean(),
         )
         .default(defaultValue);
@@ -131,6 +131,16 @@ export const envSchema = z.object({
 
     /** Nombre del esquema de base de datos. */
     DB_DATABASE: z.string().min(1),
+
+    /**
+     * Certificado de la autoridad que firmó el certificado del servidor MySQL,
+     * en PEM codificado en base64 (el `ca.pem` del servidor).
+     *
+     * La conexión va cifrada con TLS siempre. Con este certificado, además, se
+     * verifica la identidad del servidor; sin él la conexión sigue cifrada pero
+     * no protege frente a un intermediario, y el backend lo avisa al arrancar.
+     */
+    DB_SSL_CA: z.string().optional(),
 
     /**
      * Si TypeORM debe crear y alterar las tablas según las entidades al

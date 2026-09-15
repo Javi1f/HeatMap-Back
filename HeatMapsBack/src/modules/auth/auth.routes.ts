@@ -52,7 +52,7 @@ export const buildAuthRouter = (): Router => {
         asyncHandler(ctrl.cancelVerification),
     );
     router.post('/logout', generalRateLimiter, authMiddleware, asyncHandler(ctrl.logout));
-    router.get('/session', generalRateLimiter, authMiddleware, ctrl.session);
+    router.get('/session', generalRateLimiter, authMiddleware, asyncHandler(ctrl.session));
 
     return router;
 };

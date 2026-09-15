@@ -1,6 +1,7 @@
 import { injectable } from 'tsyringe';
 import { SensingConfig } from '../../config/sensing.config';
 import { Alerta } from '../../models/Alerta.entity';
+import type { Sensor } from '../../models/Sensor.entity';
 import { NotFoundError } from '../../common/errors';
 import { AlertaRepository } from '../sensor/repositories/alerta.repository';
 import { CapturaRepository } from '../sensor/repositories/captura.repository';
@@ -9,6 +10,7 @@ import { SensorRepository } from '../sensor/repositories/sensor.repository';
 import { ZonaRepository } from '../sensor/repositories/zona.repository';
 import { resumirPresentes } from '../sensor/services/presencia';
 import { PresenciaService } from '../sensor/services/presencia.service';
+import { crearCacheTemporal } from '../../common/utils/cache-temporal';
 import {
     MetricsOverview,
     OccupancyPoint,
@@ -24,6 +26,40 @@ const SENSOR_ONLINE_WINDOW_MINUTES = 3;
 
 /** Ventana por defecto para los indicadores de «ahora mismo». */
 const LIVE_WINDOW_MINUTES = 5;
+
+/** Resumen reciente del panel, compartido entre peticiones (ver `mapasRecientes`). */
+const resumenReciente = crearCacheTemporal<MetricsOverview>(1_000);
+
+/** Ocupación que se asume en una zona que todavía no tiene ninguna ventana consolidada. */
+const SIN_CONSOLIDAR = {
+    dispositivosUnicos: 0,
+    dispositivosEstables: 0,
+    rssiPromedio: null,
+    nivelOcupacion: 'baja',
+    intervaloFin: null,
+} as const;
+
+/** Ocupación sobre el aforo con un decimal, o `null` si la zona no declara aforo. */
+const porcentajeDeAforo = (unicos: number, capacidad: number | null): number | null =>
+    capacidad ? Math.round((unicos / capacidad) * 1000) / 10 : null;
+
+/** Minutos completos transcurridos desde `fecha`, o `null` si nunca ocurrió. */
+const minutosDesde = (fecha: Date | null, ahora: number): number | null =>
+    fecha === null ? null : Math.floor((ahora - fecha.getTime()) / 60_000);
+
+/** Salud de un nodo a partir de su registro y del momento de la consulta. */
+const saludDe = (sensor: Sensor, ahora: number): SensorHealth => {
+    const minutos = minutosDesde(sensor.ultimaConexion, ahora);
+    return {
+        idSensor: sensor.idSensor,
+        nombre: sensor.nombre,
+        zona: sensor.zona?.nombre ?? null,
+        estado: sensor.estado,
+        ultimaConexion: sensor.ultimaConexion === null ? null : sensor.ultimaConexion.toISOString(),
+        minutosDesdeUltimaLectura: minutos,
+        enLinea: (minutos ?? Infinity) < SENSOR_ONLINE_WINDOW_MINUTES,
+    };
+};
 
 /** Tope de horas que se pueden pedir en una serie temporal. */
 const MAX_SERIES_HOURS = 168;
@@ -54,7 +90,12 @@ export class MetricsService {
      * `detecciones` sigue contando todas las tramas, porque mide el trabajo de
      * la red de nodos y no la ocupación.
      */
-    async overview(): Promise<MetricsOverview> {
+    overview(): Promise<MetricsOverview> {
+        return resumenReciente.obtener('resumen', () => this.calcularResumen());
+    }
+
+    /** Calcula el resumen sin pasar por la caché. */
+    private async calcularResumen(): Promise<MetricsOverview> {
         const since = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60_000);
 
         const [evaluaciones, detecciones, zonas, sensores, alertasAbiertas] = await Promise.all([
@@ -67,10 +108,10 @@ export class MetricsService {
 
         const onlineThreshold = Date.now() - SENSOR_ONLINE_WINDOW_MINUTES * 60_000;
         const sensoresEnLinea = sensores.filter(
-            (s) => s.ultimaConexion !== null && s.ultimaConexion.getTime() >= onlineThreshold,
+            (sensor) => sensor.ultimaConexion !== null && sensor.ultimaConexion.getTime() >= onlineThreshold,
         ).length;
 
-        const presentes = resumirPresentes(...[...evaluaciones.values()].map((e) => e.presentes));
+        const presentes = resumirPresentes(...[...evaluaciones.values()].map((evaluacion) => evaluacion.presentes));
 
         return {
             dispositivosAhora: presentes.dispositivos,
@@ -101,24 +142,21 @@ export class MetricsService {
             this.ocupacion.findLatestPerZone(),
         ]);
 
-        const porZona = new Map(ultimas.map((o) => [o.idZona, o]));
+        const porZona = new Map(ultimas.map((ocupacion) => [ocupacion.idZona, ocupacion]));
 
         return zonas.map((zona) => {
-            const ultima = porZona.get(zona.idZona);
-            const unicos = ultima?.dispositivosUnicos ?? 0;
+            const ultima = porZona.get(zona.idZona) ?? SIN_CONSOLIDAR;
 
             return {
                 idZona: zona.idZona,
                 nombre: zona.nombre,
                 capacidadMax: zona.capacidadMax,
-                dispositivosUnicos: unicos,
-                dispositivosEstables: ultima?.dispositivosEstables ?? 0,
-                rssiPromedio: ultima?.rssiPromedio ?? null,
-                nivelOcupacion: ultima?.nivelOcupacion ?? 'baja',
-                porcentajeAforo: zona.capacidadMax
-                    ? Math.round((unicos / zona.capacidadMax) * 1000) / 10
-                    : null,
-                actualizadoEn: ultima?.intervaloFin.toISOString() ?? null,
+                dispositivosUnicos: ultima.dispositivosUnicos,
+                dispositivosEstables: ultima.dispositivosEstables,
+                rssiPromedio: ultima.rssiPromedio,
+                nivelOcupacion: ultima.nivelOcupacion,
+                porcentajeAforo: porcentajeDeAforo(ultima.dispositivosUnicos, zona.capacidadMax),
+                actualizadoEn: ultima.intervaloFin?.toISOString() ?? null,
             };
         });
     }
@@ -134,12 +172,12 @@ export class MetricsService {
         const since = new Date(Date.now() - clamped * 3_600_000);
         const rows = await this.ocupacion.findSeries(since, idZona);
 
-        return rows.map((o) => ({
-            intervaloInicio: o.intervaloInicio.toISOString(),
-            idZona: o.idZona,
-            dispositivosUnicos: o.dispositivosUnicos,
-            dispositivosEstables: o.dispositivosEstables,
-            nivelOcupacion: o.nivelOcupacion,
+        return rows.map((ocupacion) => ({
+            intervaloInicio: ocupacion.intervaloInicio.toISOString(),
+            idZona: ocupacion.idZona,
+            dispositivosUnicos: ocupacion.dispositivosUnicos,
+            dispositivosEstables: ocupacion.dispositivosEstables,
+            nivelOcupacion: ocupacion.nivelOcupacion,
         }));
     }
 
@@ -150,22 +188,7 @@ export class MetricsService {
         const sensores = await this.sensores.findAll();
         const now = Date.now();
 
-        return sensores.map((s) => {
-            const minutos =
-                s.ultimaConexion === null
-                    ? null
-                    : Math.floor((now - s.ultimaConexion.getTime()) / 60_000);
-
-            return {
-                idSensor: s.idSensor,
-                nombre: s.nombre,
-                zona: s.zona?.nombre ?? null,
-                estado: s.estado,
-                ultimaConexion: s.ultimaConexion?.toISOString() ?? null,
-                minutosDesdeUltimaLectura: minutos,
-                enLinea: minutos !== null && minutos < SENSOR_ONLINE_WINDOW_MINUTES,
-            };
-        });
+        return sensores.map((sensor) => saludDe(sensor, now));
     }
 
     /** Alertas de aglomeración abiertas. */

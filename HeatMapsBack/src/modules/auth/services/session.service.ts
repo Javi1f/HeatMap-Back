@@ -81,6 +81,16 @@ export class SessionService {
         return revoked;
     }
 
+    /**
+     * Revoca todas las sesiones de un administrador, por ejemplo al desactivar
+     * su cuenta.
+     *
+     * @returns Número de sesiones revocadas.
+     */
+    revokeAllFor(idAdmin: number): Promise<number> {
+        return this.repo.revokeAllForAdmin(idAdmin);
+    }
+
     /** Sesiones actualmente vivas. */
     listActive(): Promise<SesionAuth[]> {
         return this.repo.findActive();

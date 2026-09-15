@@ -34,9 +34,9 @@ const shutdownAll = async (
         aggregator.stop();
         await consumer.stop();
         await emitter.close();
-        await new Promise<void>((resolve, reject) =>
-            httpServer.close((err) => (err ? reject(err) : resolve())),
-        );
+        await new Promise<void>((resolve, reject) => {
+            httpServer.close((err) => (err ? reject(err) : resolve()));
+        });
         await db.destroy();
         logger.info('Shutdown completo');
         process.exitCode = 0;
@@ -100,13 +100,18 @@ const bootstrap = async (): Promise<void> => {
     const aggregator = container.resolve(OccupancyAggregatorService);
 
     await db.initialize();
-    logger.info('Base de datos conectada');
+    logger.info('Base de datos conectada con TLS');
+    if (!db.verificaCertificado) {
+        logger.warn('DB_SSL_CA no configurada: la conexión a MySQL va cifrada pero sin verificar el certificado del servidor');
+    }
 
     const app = createApp();
     const httpServer: HttpServer = createServer(app);
     emitter.initialize(httpServer);
 
-    await new Promise<void>((resolve) => httpServer.listen(cfg.port, resolve));
+    await new Promise<void>((resolve) => {
+        httpServer.listen(cfg.port, resolve);
+    });
     logger.info(`${MESSAGES.SERVER.STARTED} ${cfg.port}`);
 
     try {
@@ -124,7 +129,7 @@ const bootstrap = async (): Promise<void> => {
 };
 
 bootstrap().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('Error fatal al inicializar la aplicación', err);
+    // Sin logger disponible todavía: la consola es el único canal.
+    console.error('Error fatal al inicializar la aplicación', err); // skipcq: JS-0002
     process.exitCode = 1;
 });

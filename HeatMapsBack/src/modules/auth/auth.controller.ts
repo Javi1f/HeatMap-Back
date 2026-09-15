@@ -5,7 +5,8 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
 import { CancelVerificationDto } from './dto/cancel-verification.dto';
-import { UnauthorizedError } from '../../common/errors';
+import { InvalidCredentialsError, UnauthorizedError } from '../../common/errors';
+import { AuditoriaService } from '../users/auditoria.service';
 
 /**
  * Controlador HTTP del módulo de autenticación.
@@ -23,15 +24,27 @@ import { UnauthorizedError } from '../../common/errors';
  */
 @injectable()
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
+    constructor(
+        private readonly authService: AuthService,
+        private readonly auditoria: AuditoriaService,
+    ) {}
 
     /**
      * `POST /api/auth/login` — autentica al admin con username/email + password.
      * Devuelve `{ admin, token }` con 200.
      */
     login = async (req: Request, res: Response): Promise<void> => {
-        const result = await this.authService.login(req.body as LoginDto, req.ip ?? null);
-        res.status(200).json(result);
+        const ip = req.ip ?? null;
+        try {
+            const result = await this.authService.login(req.body as LoginDto, ip);
+            await this.auditoria.registrar({ tipo: 'inicio_sesion', idAdmin: result.admin.id, ip });
+            res.status(200).json(result);
+        } catch (err) {
+            if (err instanceof InvalidCredentialsError) {
+                await this.auditoria.registrar({ tipo: 'inicio_sesion_fallido', ip });
+            }
+            throw err;
+        }
     };
 
     /**
@@ -50,6 +63,7 @@ export class AuthController {
      */
     verifyCode = async (req: Request, res: Response): Promise<void> => {
         const result = await this.authService.verifyCode(req.body as VerifyCodeDto, req.ip ?? null);
+        await this.auditoria.registrar({ tipo: 'registro_completado', idAdmin: result.admin.id, ip: req.ip });
         res.status(200).json(result);
     };
 
@@ -71,7 +85,9 @@ export class AuthController {
      */
     logout = async (req: Request, res: Response): Promise<void> => {
         if (!req.admin) throw new UnauthorizedError();
-        res.status(200).json(await this.authService.logout(req.admin, req.token));
+        const result = await this.authService.logout(req.admin, req.token);
+        await this.auditoria.registrar({ tipo: 'cierre_sesion', idAdmin: req.admin.id, ip: req.ip });
+        res.status(200).json(result);
     };
 
     /**
@@ -79,8 +95,8 @@ export class AuthController {
      * (poblado por `authMiddleware`). Sirve al frontend para revalidar
      * sesión al recargar la app.
      */
-    session = (req: Request, res: Response): void => {
+    session = async (req: Request, res: Response): Promise<void> => {
         if (!req.admin) throw new UnauthorizedError();
-        res.status(200).json(this.authService.session(req.admin));
+        res.status(200).json(await this.authService.session(req.admin));
     };
 }

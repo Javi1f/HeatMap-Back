@@ -21,6 +21,6 @@ export const generateNumericCode = (digits = 5): string => {
         throw new RangeError('digits debe estar entre 1 y 12');
     }
     const max = 10 ** digits;
-    const n = crypto.randomInt(0, max);
-    return n.toString().padStart(digits, '0');
+    const cantidad = crypto.randomInt(0, max);
+    return cantidad.toString().padStart(digits, '0');
 };

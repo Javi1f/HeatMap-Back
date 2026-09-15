@@ -177,14 +177,14 @@ export class OcupacionRepository {
             ventanasAltas: string;
         }>();
 
-        return filas.map((f) => ({
-            idZona: f.idZona,
-            nombre: f.nombre,
-            ventanas: Number(f.ventanas),
-            promedioUnicos: Math.round(Number(f.promedioUnicos) * 100) / 100,
-            picoUnicos: Number(f.picoUnicos),
-            promedioEstables: Math.round(Number(f.promedioEstables) * 100) / 100,
-            ventanasAltas: Number(f.ventanasAltas),
+        return filas.map((fila) => ({
+            idZona: fila.idZona,
+            nombre: fila.nombre,
+            ventanas: Number(fila.ventanas),
+            promedioUnicos: Math.round(Number(fila.promedioUnicos) * 100) / 100,
+            picoUnicos: Number(fila.picoUnicos),
+            promedioEstables: Math.round(Number(fila.promedioEstables) * 100) / 100,
+            ventanasAltas: Number(fila.ventanasAltas),
         }));
     }
 
