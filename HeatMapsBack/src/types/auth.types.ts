@@ -1,10 +1,10 @@
-import type { RolAdmin } from '../models/Admin.entity';
+import type { RolAdmin } from '../persistencia/entidades/Admin.entity';
 /**
  * Tipos de dominio para autenticación.
  *
  * Notas:
  *  - Las **DTOs de request** (`LoginDto`, `RegisterDto`, etc.) viven en
- *    `src/modules/auth/dto/` derivadas de su esquema Zod. NO se ponen aquí
+ *    `src/modules/identidad/autenticacion/dto/` derivadas de su esquema Zod. NO se ponen aquí
  *    para evitar duplicación de definición/validación.
  *  - Esta interfaz `JwtPayload` la consumen tanto el servicio que firma
  *    como el middleware que verifica.
@@ -15,7 +15,7 @@ import type { RolAdmin } from '../models/Admin.entity';
  */
 export interface JwtPayload {
     /** Identificador del administrador. */
-    id: number;
+    id: string;
 
     /** Nombre de usuario ya descifrado. */
     username: string;

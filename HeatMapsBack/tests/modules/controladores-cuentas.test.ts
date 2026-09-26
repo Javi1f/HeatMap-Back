@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthController } from '../../src/modules/auth/auth.controller';
-import { AllowedEmailsController } from '../../src/modules/allowed-emails/allowed-emails.controller';
-import { UsersController } from '../../src/modules/users/users.controller';
+import { AuthController } from '../../src/modules/identidad/autenticacion/auth.controller';
+import { AllowedEmailsController } from '../../src/modules/identidad/correos-permitidos/allowed-emails.controller';
+import { UsersController } from '../../src/modules/identidad/usuarios/users.controller';
 import { InvalidCredentialsError, UnauthorizedError, ValidationError } from '../../src/common/errors';
 import { reqFalsa, resFalsa } from '../helpers/dobles';
 
@@ -117,7 +117,7 @@ describe('AllowedEmailsController', () => {
     it('añade un correo registrando quién lo autorizó', async () => {
         const res = resFalsa();
         await ctrl.add(reqFalsa({ admin: ADMIN, body: { email: 'c@d.co' } }), res);
-        expect(servicio.add).toHaveBeenCalledWith('c@d.co', 'raiz');
+        expect(servicio.add).toHaveBeenCalledWith('c@d.co', ADMIN);
         expect(res.statusCode).toBe(201);
     });
 
@@ -125,11 +125,12 @@ describe('AllowedEmailsController', () => {
         await expect(ctrl.add(reqFalsa(), resFalsa())).rejects.toBeInstanceOf(UnauthorizedError);
     });
 
-    it('elimina un correo por id', async () => {
+    it('elimina un correo por id, a nombre de quien lo pide', async () => {
         const res = resFalsa();
-        await ctrl.remove(reqFalsa({ params: { id: 4 } }), res);
-        expect(servicio.remove).toHaveBeenCalledWith(4);
+        await ctrl.remove(reqFalsa({ admin: ADMIN, params: { id: '11111111-1111-4111-8111-111111111111' } }), res);
+        expect(servicio.remove).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', ADMIN);
         expect(res.cuerpo).toEqual({ success: true, message: 'Correo eliminado de la lista' });
+        await expect(ctrl.remove(reqFalsa({ params: { id: '11111111-1111-4111-8111-111111111111' } }), resFalsa())).rejects.toBeInstanceOf(UnauthorizedError);
     });
 });
 

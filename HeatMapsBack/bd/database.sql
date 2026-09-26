@@ -1,29 +1,37 @@
+-- ════════════════════════════════════════════════════════════════════
+-- Esquema de PlaceAt sobre MySQL 8.
+--
+-- Implementa el modelo relacional del documento (Anexo 13): las nueve
+-- entidades CORREO_PERMITIDO, ADMIN, SESION_AUTH, ZONA, SENSOR, CAPTURA,
+-- OCUPACION_AGREGADA, ALERTA y REPORTE, con sus identificadores UUID y sus
+-- claves foráneas. Tres tablas de apoyo completan requerimientos que el modelo
+-- no dibuja:
+--   · registro_pendiente         → alta con verificación por correo (MFA).
+--   · evento_auditoria           → RF-13 y RNF-09, logs de auditoría.
+--   · dispositivo_infraestructura → RF-11, depuración de lo que no es un
+--                                    ocupante (puntos de acceso, nodos).
+--
+-- Diferencias deliberadas con el modelo, por requerimientos de seguridad:
+--   · email y username se guardan cifrados (RNF-13) y su unicidad se exige
+--     sobre un hash (`*_hash`), porque el cifrado con IV aleatorio no deja
+--     comparar textos cifrados.
+--   · En MySQL no hay tipo UUID: los identificadores UUID son CHAR(36).
+--
+-- Este archivo es la fuente del esquema. Las entidades TypeORM lo reflejan
+-- columna a columna, índice a índice (`npm run bd:deriva` lo comprueba), y
+-- DB_SYNCHRONIZE va siempre en false.
+-- ════════════════════════════════════════════════════════════════════
+
 CREATE DATABASE IF NOT EXISTS bdproyectodegrado
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
 USE bdproyectodegrado;
 
-CREATE TABLE IF NOT EXISTS correo_permitido (
-    id_correo      INT UNSIGNED NOT NULL AUTO_INCREMENT,
-
-    email          TEXT         NOT NULL,
-    email_hash     CHAR(64)     NOT NULL,
-
-    anadido_por    TEXT         NULL,
-
-    fecha_anadido  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-
-    es_fundador    BOOLEAN      NOT NULL DEFAULT FALSE,
-
-    CONSTRAINT pk_correo_permitido PRIMARY KEY (id_correo),
-    CONSTRAINT uq_correo_permitido_hash UNIQUE (email_hash)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+-- ── Gestión de acceso ─────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS admin (
-    id_admin              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    id_admin              CHAR(36)     NOT NULL,
 
     username              TEXT         NOT NULL,
     username_hash         CHAR(64)     NOT NULL,
@@ -48,6 +56,31 @@ CREATE TABLE IF NOT EXISTS admin (
     CONSTRAINT pk_admin PRIMARY KEY (id_admin),
     CONSTRAINT uq_admin_username_hash UNIQUE (username_hash),
     CONSTRAINT uq_admin_email_hash UNIQUE (email_hash)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS correo_permitido (
+    id_correo      CHAR(36)     NOT NULL,
+
+    email          TEXT         NOT NULL,
+    email_hash     CHAR(64)     NOT NULL,
+
+    -- Administrador que autorizó el correo. NULL para el correo fundador, que
+    -- se da de alta al instalar, antes de que exista ningún administrador.
+    anadido_por    CHAR(36)     NULL,
+
+    fecha_anadido  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
+    -- El correo del administrador raíz: nadie puede eliminarlo, ni él mismo.
+    es_fundador    BOOLEAN      NOT NULL DEFAULT FALSE,
+
+    CONSTRAINT pk_correo_permitido PRIMARY KEY (id_correo),
+    CONSTRAINT uq_correo_permitido_hash UNIQUE (email_hash),
+    CONSTRAINT fk_correo_permitido_admin
+        FOREIGN KEY (anadido_por) REFERENCES admin (id_admin)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+    INDEX idx_correo_permitido_anadido_por (anadido_por)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
@@ -77,7 +110,7 @@ CREATE TABLE IF NOT EXISTS registro_pendiente (
 
 CREATE TABLE IF NOT EXISTS sesion_auth (
     id_sesion         CHAR(36)     NOT NULL,
-    id_admin          INT UNSIGNED NOT NULL,
+    id_admin          CHAR(36)     NOT NULL,
 
     token_hash        CHAR(64)     NOT NULL,
 
@@ -96,6 +129,25 @@ CREATE TABLE IF NOT EXISTS sesion_auth (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
+
+-- Eventos de auditoría de acciones administrativas (RF-13, RNF-09). El detalle
+-- solo lleva identificadores internos, nunca correos ni nombres. `id_admin` no
+-- es clave foránea a propósito: la traza tiene que sobrevivir a la cuenta.
+CREATE TABLE IF NOT EXISTS evento_auditoria (
+    id_evento   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    fecha       DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    id_admin    CHAR(36)        NULL,
+    tipo        VARCHAR(40)     NOT NULL,
+    detalle     VARCHAR(255)    NULL,
+    ip_origen   VARCHAR(45)     NULL,
+
+    CONSTRAINT pk_evento_auditoria PRIMARY KEY (id_evento),
+    INDEX idx_evento_auditoria_fecha (fecha)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- ── Infraestructura operativa ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS zona (
     id_zona        CHAR(36)     NOT NULL,
@@ -128,10 +180,10 @@ CREATE TABLE IF NOT EXISTS sensor (
 
     fecha_registro   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
-    registrado_por   INT UNSIGNED NULL,
+    registrado_por   CHAR(36)     NULL,
 
-    pos_x            DECIMAL(6,2) NULL,
-    pos_y            DECIMAL(6,2) NULL,
+    pos_x            DECIMAL(6,2) NULL COMMENT 'Metros desde el borde izquierdo de la zona',
+    pos_y            DECIMAL(6,2) NULL COMMENT 'Metros desde el borde inferior de la zona',
 
     CONSTRAINT pk_sensor PRIMARY KEY (id_sensor),
     CONSTRAINT fk_sensor_zona
@@ -141,7 +193,8 @@ CREATE TABLE IF NOT EXISTS sensor (
         FOREIGN KEY (registrado_por) REFERENCES admin (id_admin)
         ON UPDATE CASCADE ON DELETE SET NULL,
     INDEX idx_sensor_zona (id_zona),
-    INDEX idx_sensor_estado (estado)
+    INDEX idx_sensor_estado (estado),
+    INDEX idx_sensor_registrado_por (registrado_por)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
@@ -149,6 +202,7 @@ CREATE TABLE IF NOT EXISTS sensor (
 CREATE TABLE IF NOT EXISTS captura (
     id_captura         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
+    -- HMAC-SHA256 de la MAC. La MAC en claro nunca se almacena (RF-02).
     mac_hash           CHAR(64)     NOT NULL,
 
     id_sensor          VARCHAR(50)  NOT NULL,
@@ -177,24 +231,8 @@ CREATE TABLE IF NOT EXISTS captura (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
--- Eventos de auditoria de acciones administrativas. El detalle solo lleva
--- identificadores internos, nunca correos ni nombres.
-CREATE TABLE IF NOT EXISTS evento_auditoria (
-    id_evento   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    fecha       DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    id_admin    INT UNSIGNED    NULL,
-    tipo        VARCHAR(40)     NOT NULL,
-    detalle     VARCHAR(255)    NULL,
-    ip_origen   VARCHAR(45)     NULL,
-
-    CONSTRAINT pk_evento_auditoria PRIMARY KEY (id_evento),
-    INDEX idx_evento_auditoria_fecha (fecha)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
-
 -- Dispositivos que no cuentan como ocupantes: puntos de acceso, equipos pegados
--- a un nodo y exclusiones manuales. Se clasifican al ingerir, que es el unico
+-- a un nodo y exclusiones manuales. Se clasifican al ingerir, que es el único
 -- momento en que se ve la MAC en claro. Nunca guarda la MAC, solo su HMAC.
 CREATE TABLE IF NOT EXISTS dispositivo_infraestructura (
     mac_hash           CHAR(64)     NOT NULL,
@@ -210,6 +248,8 @@ CREATE TABLE IF NOT EXISTS dispositivo_infraestructura (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
+
+-- ── Análisis de información ───────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS ocupacion_agregada (
     id_ocupacion          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -244,21 +284,25 @@ CREATE TABLE IF NOT EXISTS alerta (
     timestamp_alerta  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     resuelta          BOOLEAN   NOT NULL DEFAULT FALSE,
 
-    resuelta_por      TEXT      NULL,
+    resuelta_por      CHAR(36)  NULL,
 
     CONSTRAINT pk_alerta PRIMARY KEY (id_alerta),
     CONSTRAINT fk_alerta_zona
         FOREIGN KEY (id_zona) REFERENCES zona (id_zona)
         ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_alerta_resuelta_por
+        FOREIGN KEY (resuelta_por) REFERENCES admin (id_admin)
+        ON UPDATE CASCADE ON DELETE SET NULL,
     INDEX idx_alerta_zona_timestamp (id_zona, timestamp_alerta),
-    INDEX idx_alerta_resuelta (resuelta)
+    INDEX idx_alerta_resuelta (resuelta),
+    INDEX idx_alerta_resuelta_por (resuelta_por)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS reporte (
     id_reporte       CHAR(36)     NOT NULL,
-    id_admin         INT UNSIGNED NOT NULL,
+    id_admin         CHAR(36)     NOT NULL,
 
     id_zona          CHAR(36)     NULL,
 
@@ -285,6 +329,8 @@ CREATE TABLE IF NOT EXISTS reporte (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
+-- ── Espacio monitorizado ──────────────────────────────────────────────
+
 SET @id_zona = 'plazoleta-central';
 
 INSERT INTO zona (id_zona, nombre, descripcion, capacidad_max, coordenadas, activa)
@@ -293,8 +339,7 @@ VALUES (
     'Plazoleta central',
     'Plazoleta rectangular de 21 m x 11,84 m con tres nodos de captura: las dos esquinas inferiores y el centro del borde superior.',
     NULL,
-    -- ajusteVerticalM corrige el sesgo hacia el lado de los nodos 1 y 2; ver bd/README.md.
-    JSON_OBJECT('forma', 'rectangulo', 'ancho', 21.00, 'alto', 11.84, 'ajusteVerticalM', 2.5),
+    JSON_OBJECT('forma', 'rectangulo', 'ancho', 21.00, 'alto', 11.84),
     TRUE
 )
 ON DUPLICATE KEY UPDATE

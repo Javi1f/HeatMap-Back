@@ -4,16 +4,16 @@ import { container } from 'tsyringe';
 import type { Application, Request, Response } from 'express';
 import { createApp } from '../src/app';
 import { ApiPayloadCipher } from '../src/crypto/api-payload.crypto';
-import { JwtService } from '../src/modules/auth/services/jwt.service';
-import { SessionService } from '../src/modules/auth/services/session.service';
-import { AdminRepository } from '../src/modules/auth/repositories/admin.repository';
-import { AuthController } from '../src/modules/auth/auth.controller';
-import { AllowedEmailsController } from '../src/modules/allowed-emails/allowed-emails.controller';
-import { UsersController } from '../src/modules/users/users.controller';
-import { MetricsController } from '../src/modules/metrics/metrics.controller';
-import { ReportesController } from '../src/modules/reportes/reportes.controller';
-import { PublicoController } from '../src/modules/publico/publico.controller';
-import { SensorController } from '../src/modules/sensor/sensor.controller';
+import { JwtService } from '../src/modules/identidad/autenticacion/services/jwt.service';
+import { SessionService } from '../src/modules/identidad/autenticacion/services/session.service';
+import { AdminRepository } from '../src/persistencia/repositorios/admin.repository';
+import { AuthController } from '../src/modules/identidad/autenticacion/auth.controller';
+import { AllowedEmailsController } from '../src/modules/identidad/correos-permitidos/allowed-emails.controller';
+import { UsersController } from '../src/modules/identidad/usuarios/users.controller';
+import { MetricsController } from '../src/modules/historicos/metricas/metrics.controller';
+import { ReportesController } from '../src/modules/historicos/reportes/reportes.controller';
+import { PublicoController } from '../src/modules/historicos/publico/publico.controller';
+import { SensorController } from '../src/modules/ingesta/sensor.controller';
 import { ValidationError } from '../src/common/errors';
 import { silenciar } from './helpers/dobles';
 
@@ -213,13 +213,13 @@ describe('Aplicación: rol root', () => {
     });
 
     it('gestión de usuarios: valida id, rol, activo y límite de auditoría', async () => {
-        const rol = await request(app).patch('/api/users/admins/2/rol').set('Authorization', ROOT).send(cifrado({ rol: 'root' }));
-        expect(descifrar(rol.body)).toMatchObject({ accion: 'cambiarRol', params: { id: 2 }, body: { rol: 'root' } });
+        const rol = await request(app).patch('/api/users/admins/22222222-2222-4222-8222-222222222222/rol').set('Authorization', ROOT).send(cifrado({ rol: 'root' }));
+        expect(descifrar(rol.body)).toMatchObject({ accion: 'cambiarRol', params: { id: '22222222-2222-4222-8222-222222222222' }, body: { rol: 'root' } });
 
-        expect((await request(app).patch('/api/users/admins/x/rol').set('Authorization', ROOT).send(cifrado({ rol: 'root' }))).status).toBe(400);
-        expect((await request(app).patch('/api/users/admins/2/rol').set('Authorization', ROOT).send(cifrado({ rol: 'dios' }))).status).toBe(400);
+        expect((await request(app).patch('/api/users/admins/2/rol').set('Authorization', ROOT).send(cifrado({ rol: 'root' }))).status).toBe(400);
+        expect((await request(app).patch('/api/users/admins/22222222-2222-4222-8222-222222222222/rol').set('Authorization', ROOT).send(cifrado({ rol: 'dios' }))).status).toBe(400);
 
-        const activo = await request(app).patch('/api/users/admins/2/activo').set('Authorization', ROOT).send(cifrado({ activo: false }));
+        const activo = await request(app).patch('/api/users/admins/22222222-2222-4222-8222-222222222222/activo').set('Authorization', ROOT).send(cifrado({ activo: false }));
         expect(descifrar(activo.body)).toMatchObject({ accion: 'cambiarActivo', body: { activo: false } });
 
         const auditoria = await request(app).get('/api/users/auditoria').set('Authorization', ROOT);
@@ -232,9 +232,9 @@ describe('Aplicación: rol root', () => {
         expect(descifrar(alta.body)).toMatchObject({ accion: 'add', body: { email: 'nuevo@b.co' } });
         expect((await request(app).post('/api/allowed-emails').set('Authorization', ROOT).send(cifrado({ email: 'no' }))).status).toBe(400);
 
-        const baja = await request(app).delete('/api/allowed-emails/7').set('Authorization', ROOT);
-        expect(descifrar(baja.body)).toMatchObject({ accion: 'remove', params: { id: 7 } });
-        expect((await request(app).delete('/api/allowed-emails/-1').set('Authorization', ROOT)).status).toBe(400);
+        const baja = await request(app).delete('/api/allowed-emails/11111111-1111-4111-8111-111111111111').set('Authorization', ROOT);
+        expect(descifrar(baja.body)).toMatchObject({ accion: 'remove', params: { id: '11111111-1111-4111-8111-111111111111' } });
+        expect((await request(app).delete('/api/allowed-emails/7').set('Authorization', ROOT)).status).toBe(400);
     });
 });
 

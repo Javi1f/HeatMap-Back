@@ -35,9 +35,19 @@ export const MESSAGES = {
         DATA_RECEIVED: 'Datos recibidos',
         DATA_SENT: 'Datos enviados por WebSocket',
         DECRYPT_ERROR: 'Error al descifrar mensaje',
+        INVALID_PAYLOAD: 'Lectura descartada por estructura inválida',
+        INVALID_DEVICES: 'dispositivos descartados por datos inválidos',
+        PROCESS_ERROR: 'Error al procesar y guardar una lectura',
         EMPTY_MESSAGE: 'Mensaje vacío recibido',
         STALE_DISCARDED:
             'mensajes descartados por antiguos. Si se repite, el consumer va atrasado y no se guardan '
             + 'capturas: comprueba qué instancia del grupo tiene la partición y si da abasto.',
+        BACKLOG_SKIPPED:
+            'mensajes de la cola omitidos. Todos eran anteriores al límite, así que el consumer se '
+            + 'adelantó a la cabeza del topic para volver a guardar capturas en tiempo real.',
+        STALE_SKIPPED_ON_JOIN:
+            'mensajes caducados omitidos al unirse al grupo: la cola que se acumuló con el backend '
+            + 'parado ya superaba el límite de antigüedad.',
+        SEEK_ERROR: 'No se pudo adelantar el consumer en el topic',
     },
 } as const;

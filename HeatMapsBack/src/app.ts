@@ -2,16 +2,16 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import { container } from 'tsyringe';
 import { AppConfig } from './config/app.config';
-import { decryptRequest, encryptResponse } from './middlewares/crypto.middleware';
+import { decryptRequest, encryptResponse } from './crypto/crypto.middleware';
 import { errorHandler, notFoundHandler } from './common/middlewares/error-handler.middleware';
 import { requestIdMiddleware } from './common/middlewares/request-id.middleware';
-import { buildAuthRouter } from './modules/auth/auth.routes';
-import { buildAllowedEmailsRouter } from './modules/allowed-emails/allowed-emails.routes';
-import { buildSensorRouter } from './modules/sensor/sensor.routes';
-import { buildMetricsRouter } from './modules/metrics/metrics.routes';
-import { buildUsersRouter } from './modules/users/users.routes';
-import { buildReportesRouter } from './modules/reportes/reportes.routes';
-import { buildPublicoRouter } from './modules/publico/publico.routes';
+import { buildAuthRouter } from './modules/identidad/autenticacion/auth.routes';
+import { buildAllowedEmailsRouter } from './modules/identidad/correos-permitidos/allowed-emails.routes';
+import { buildSensorRouter } from './modules/ingesta/sensor.routes';
+import { buildMetricsRouter } from './modules/historicos/metricas/metrics.routes';
+import { buildUsersRouter } from './modules/identidad/usuarios/users.routes';
+import { buildReportesRouter } from './modules/historicos/reportes/reportes.routes';
+import { buildPublicoRouter } from './modules/historicos/publico/publico.routes';
 
 /**
  * Construye y configura la aplicación Express.

@@ -1,56 +1,70 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AllowedEmailsService } from '../../src/modules/allowed-emails/allowed-emails.service';
-import { UsersService } from '../../src/modules/users/users.service';
-import { AuditoriaService } from '../../src/modules/users/auditoria.service';
-import { ConflictError, NotFoundError } from '../../src/common/errors';
+import { AllowedEmailsService } from '../../src/modules/identidad/correos-permitidos/allowed-emails.service';
+import { UsersService } from '../../src/modules/identidad/usuarios/users.service';
+import { AuditoriaService } from '../../src/modules/identidad/usuarios/auditoria.service';
+import { AuditoriaRepository } from '../../src/persistencia/repositorios/auditoria.repository';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../src/common/errors';
 import { cifradorFalso, dbFalsa, loggerFalso, repoTypeorm } from '../helpers/dobles';
 
 describe('AllowedEmailsService', () => {
     const creado = new Date('2026-09-01T10:00:00Z');
+    /** Administrador que hace las peticiones. */
+    const RAIZ = { id: '11111111-1111-4111-8111-111111111111', username: 'raiz', email: 'raiz@b.co' };
     let repo: Record<string, ReturnType<typeof vi.fn>>;
     let servicio: AllowedEmailsService;
 
     beforeEach(() => {
         repo = {
             findAll: vi.fn(() => Promise.resolve([
-                { id: 1, email: 'enc(a@b.co)', addedBy: 'enc(raiz)', createdAt: creado },
-                { id: 2, email: 'enc(c@d.co)', addedBy: null, createdAt: creado },
+                { id: 'c1', email: 'enc(a@b.co)', autor: { username: 'enc(raiz)' }, createdAt: creado, esFundador: false },
+                { id: 'c2', email: 'enc(c@d.co)', autor: null, createdAt: creado, esFundador: true },
             ])),
             findByEmailHash: vi.fn(() => Promise.resolve(null)),
             findById: vi.fn(() => Promise.resolve(null)),
-            create: vi.fn((datos: object) => Promise.resolve({ id: 9, createdAt: creado, ...datos })),
+            create: vi.fn((datos: object) => Promise.resolve({ id: 'c9', createdAt: creado, ...datos })),
             deleteById: vi.fn(),
         };
         servicio = new AllowedEmailsService(repo as never, cifradorFalso() as never);
     });
 
-    it('lista los correos descifrados, con addedBy null si no consta', async () => {
+    it('lista los correos descifrados con el nombre de quien los autorizó y la marca de fundador', async () => {
         await expect(servicio.getAll()).resolves.toEqual([
-            { id: 1, email: 'a@b.co', addedBy: 'raiz', createdAt: creado },
-            { id: 2, email: 'c@d.co', addedBy: null, createdAt: creado },
+            { id: 'c1', email: 'a@b.co', addedBy: 'raiz', createdAt: creado, esFundador: false },
+            { id: 'c2', email: 'c@d.co', addedBy: null, createdAt: creado, esFundador: true },
         ]);
     });
 
-    it('añade un correo cifrado con su hash de búsqueda', async () => {
-        const vista = await servicio.add('nuevo@b.co', 'raiz');
-        expect(repo.create).toHaveBeenCalledWith({ email: 'enc(nuevo@b.co)', emailHash: 'h(nuevo@b.co)', addedBy: 'enc(raiz)' });
-        expect(vista).toEqual({ id: 9, email: 'nuevo@b.co', addedBy: 'raiz', createdAt: creado });
+    it('añade un correo cifrado con su hash, a nombre del administrador que lo pide', async () => {
+        const vista = await servicio.add('nuevo@b.co', RAIZ);
+        expect(repo.create).toHaveBeenCalledWith({
+            email: 'enc(nuevo@b.co)', emailHash: 'h(nuevo@b.co)', anadidoPor: RAIZ.id, esFundador: false,
+        });
+        expect(vista).toEqual({ id: 'c9', email: 'nuevo@b.co', addedBy: 'raiz', createdAt: creado, esFundador: false });
     });
 
     it('no admite correos repetidos', async () => {
-        repo.findByEmailHash.mockResolvedValue({ id: 1 });
-        await expect(servicio.add('a@b.co', 'raiz')).rejects.toBeInstanceOf(ConflictError);
+        repo.findByEmailHash.mockResolvedValue({ id: 'c1' });
+        await expect(servicio.add('a@b.co', RAIZ)).rejects.toBeInstanceOf(ConflictError);
         expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('elimina un correo existente', async () => {
-        repo.findById.mockResolvedValue({ id: 1 });
-        await servicio.remove(1);
-        expect(repo.deleteById).toHaveBeenCalledWith(1);
+        repo.findById.mockResolvedValue({ id: 'c1', emailHash: 'h(a@b.co)', esFundador: false });
+        await servicio.remove('c1', RAIZ);
+        expect(repo.deleteById).toHaveBeenCalledWith('c1');
+    });
+
+    it('el servidor protege el correo fundador y el propio, aunque se pida a mano', async () => {
+        repo.findById.mockResolvedValueOnce({ id: 'c2', emailHash: 'h(c@d.co)', esFundador: true });
+        await expect(servicio.remove('c2', RAIZ)).rejects.toThrow(new ForbiddenError('No se puede eliminar el correo fundador'));
+
+        repo.findById.mockResolvedValueOnce({ id: 'c3', emailHash: 'h(raiz@b.co)', esFundador: false });
+        await expect(servicio.remove('c3', RAIZ)).rejects.toThrow(new ForbiddenError('No puedes eliminar tu propio correo'));
+        expect(repo.deleteById).not.toHaveBeenCalled();
     });
 
     it('eliminar uno inexistente da 404', async () => {
-        await expect(servicio.remove(99)).rejects.toBeInstanceOf(NotFoundError);
+        await expect(servicio.remove('no-existe', RAIZ)).rejects.toBeInstanceOf(NotFoundError);
         expect(repo.deleteById).not.toHaveBeenCalled();
     });
 
@@ -148,7 +162,7 @@ describe('UsersService', () => {
 describe('AuditoriaService', () => {
     it('registra el evento recortando detalle e IP al tamaño de sus columnas', async () => {
         const repo = repoTypeorm();
-        const servicio = new AuditoriaService(dbFalsa(repo), loggerFalso());
+        const servicio = new AuditoriaService(new AuditoriaRepository(dbFalsa(repo) as never), loggerFalso());
 
         await servicio.registrar({ tipo: 'rol_cambiado', idAdmin: 1, detalle: 'x'.repeat(300), ip: 'y'.repeat(60) });
 
@@ -157,7 +171,7 @@ describe('AuditoriaService', () => {
 
     it('usa null en los campos ausentes', async () => {
         const repo = repoTypeorm();
-        await new AuditoriaService(dbFalsa(repo), loggerFalso()).registrar({ tipo: 'inicio_sesion_fallido' });
+        await new AuditoriaService(new AuditoriaRepository(dbFalsa(repo) as never), loggerFalso()).registrar({ tipo: 'inicio_sesion_fallido' });
         expect(repo.insert).toHaveBeenCalledWith({ tipo: 'inicio_sesion_fallido', idAdmin: null, detalle: null, ipOrigen: null });
     });
 
@@ -166,7 +180,7 @@ describe('AuditoriaService', () => {
         repo.insert.mockRejectedValue(new Error('sin conexión'));
         const logger = loggerFalso();
 
-        await expect(new AuditoriaService(dbFalsa(repo), logger).registrar({ tipo: 'cierre_sesion' })).resolves.toBeUndefined();
+        await expect(new AuditoriaService(new AuditoriaRepository(dbFalsa(repo) as never), logger).registrar({ tipo: 'cierre_sesion' })).resolves.toBeUndefined();
         expect(logger.error).toHaveBeenCalledOnce();
     });
 
@@ -175,7 +189,7 @@ describe('AuditoriaService', () => {
         const fecha = new Date('2026-09-14T12:00:00.123Z');
         repo.find.mockResolvedValue([{ idEvento: '8', fecha, idAdmin: 1, tipo: 'inicio_sesion', detalle: null, ipOrigen: '1.1.1.1' }]);
 
-        const lista = await new AuditoriaService(dbFalsa(repo), loggerFalso()).listar(50);
+        const lista = await new AuditoriaService(new AuditoriaRepository(dbFalsa(repo) as never), loggerFalso()).listar(50);
 
         expect(repo.find).toHaveBeenCalledWith({ order: { fecha: 'DESC' }, take: 50 });
         expect(lista).toEqual([{ id: '8', fecha: '2026-09-14T12:00:00.123Z', idAdmin: 1, tipo: 'inicio_sesion', detalle: null, ipOrigen: '1.1.1.1' }]);

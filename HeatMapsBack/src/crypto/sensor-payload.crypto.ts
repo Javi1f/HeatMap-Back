@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { singleton } from 'tsyringe';
 import { CryptoConfig } from '../config/crypto.config';
-import { SensorPayload } from '../types/sensor.types';
 
 /**
  * Operación AES-256-CTR pura. Es **simétrica**: la misma rutina cifra y
@@ -48,7 +47,7 @@ export class SensorPayloadCipher {
      * @param payload - Objeto serializable a JSON.
      * @returns Buffer con el layout descrito arriba.
      */
-    encrypt(payload: SensorPayload): Buffer {
+    encrypt(payload: unknown): Buffer {
         const plaintext = Buffer.from(JSON.stringify(payload), 'utf-8');
         const nonce1 = crypto.randomBytes(this.cfg.kafkaNonceSize);
         const nonce2 = crypto.randomBytes(this.cfg.kafkaNonceSize);
@@ -60,9 +59,13 @@ export class SensorPayloadCipher {
     /**
      * Descifra un buffer recibido desde Kafka.
      *
+     * Devuelve `unknown` a propósito: descifrar no dice nada de la forma del
+     * contenido. Quien lo recibe debe pasarlo por `validarLectura` antes de
+     * usarlo (RF-12).
+     *
      * @throws Error si el buffer es demasiado corto o el JSON resultante es inválido.
      */
-    decrypt(raw: Buffer): SensorPayload {
+    decrypt(raw: Buffer): unknown {
         const nSize = this.cfg.kafkaNonceSize;
         if (raw.length < nSize * 2 + 1) {
             throw new Error('Mensaje cifrado demasiado corto');
@@ -74,6 +77,6 @@ export class SensorPayloadCipher {
         const layer1 = aesCtrXor(this.cfg.kafkaKey2, nonce2, ct);
         const plain = aesCtrXor(this.cfg.kafkaKey1, nonce1, layer1);
 
-        return JSON.parse(plain.toString('utf-8')) as SensorPayload;
+        return JSON.parse(plain.toString('utf-8')) as unknown;
     }
 }

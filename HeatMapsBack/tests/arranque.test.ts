@@ -83,9 +83,9 @@ describe('index: arranque y cierre', () => {
         const { LoggerService } = await import('../src/common/logger/logger.service');
         const { AppConfig } = await import('../src/config/app.config');
         const { DatabaseConfig } = await import('../src/config/database.config');
-        const { SocketEmitterService } = await import('../src/modules/sensor/services/socket-emitter.service');
-        const { KafkaConsumerService } = await import('../src/modules/sensor/services/kafka-consumer.service');
-        const { OccupancyAggregatorService } = await import('../src/modules/sensor/services/occupancy-aggregator.service');
+        const { SocketEmitterService } = await import('../src/modules/tiempo-real/socket-emitter.service');
+        const { KafkaConsumerService } = await import('../src/modules/ingesta/kafka-consumer.service');
+        const { OccupancyAggregatorService } = await import('../src/modules/procesamiento/occupancy-aggregator.service');
 
         const dobles = {
             logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

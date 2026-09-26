@@ -18,8 +18,11 @@
     "typecheck": "tsc --noEmit",
     "dispositivo:medir": "ts-node src/scripts/medir-dispositivo.ts",
     "dispositivo:excluir": "ts-node src/scripts/excluir-dispositivo.ts",
+    "kafka:atraso": "ts-node src/scripts/adelantar-consumer.ts",
     "bd:respaldo": "ts-node src/scripts/respaldo-bd.ts",
-    "bd:restaurar": "ts-node src/scripts/restaurar-bd.ts"
+    "bd:restaurar": "ts-node src/scripts/restaurar-bd.ts",
+    "bd:deriva": "ts-node src/scripts/deriva-esquema.ts",
+    "bd:migrar": "ts-node src/scripts/migrar-esquema.ts"
   },
   "keywords": [],
   "author": "",

@@ -9,7 +9,7 @@ import { KafkaConfig } from '../../src/config/kafka.config';
 import { MailConfig } from '../../src/config/mail.config';
 import { SensingConfig } from '../../src/config/sensing.config';
 import { SocketConfig } from '../../src/config/socket.config';
-import { decimalTransformer } from '../../src/models/numeric.transformer';
+import { decimalTransformer } from '../../src/persistencia/entidades/numeric.transformer';
 import { DataSourceToken, KafkaClientToken, LoggerToken, MailTransporterToken, SocketServerToken } from '../../src/common/di/tokens';
 import { silenciar } from '../helpers/dobles';
 
@@ -126,12 +126,13 @@ describe('Objetos de configuración', () => {
 
     it('SensingConfig expone los parámetros del modelo', () => {
         const cfg = new SensingConfig(envCon({
-            RSSI_REFERENCE_DBM: -45, PATH_LOSS_EXPONENT: 2.7, PRESENCIA_RSSI_MINIMO_DBM: -75, INFRAESTRUCTURA_VIGENCIA_HORAS: 24,
-            AGGREGATION_INTERVAL_MINUTES: 5, OCCUPANCY_HIGH_RATIO: 0.8, OCCUPANCY_MEDIUM_RATIO: 0.5,
+            RSSI_REFERENCE_DBM: -45, PATH_LOSS_EXPONENT: 2.7, PRESENCIA_RSSI_MINIMO_DBM: -75, PRESENCIA_NODOS_MINIMOS: 2, PRESENCIA_RSSI_MEJOR_MINIMO_DBM: -60, INFRAESTRUCTURA_PERMANENCIA_MINUTOS: 30,
+            INFRAESTRUCTURA_VIGENCIA_HORAS: 24, AGGREGATION_INTERVAL_MINUTES: 5, OCCUPANCY_HIGH_RATIO: 0.8, OCCUPANCY_MEDIUM_RATIO: 0.5,
         }));
         expect(cfg.macHashKey).toHaveLength(32);
-        expect([cfg.rssiReferenceDbm, cfg.pathLossExponent, cfg.presenciaRssiMinimoDbm, cfg.infraestructuraVigenciaHoras,
-            cfg.aggregationIntervalMinutes, cfg.occupancyHighRatio, cfg.occupancyMediumRatio]).toEqual([-45, 2.7, -75, 24, 5, 0.8, 0.5]);
+        expect([cfg.rssiReferenceDbm, cfg.pathLossExponent, cfg.presenciaRssiMinimoDbm, cfg.presenciaNodosMinimos, cfg.presenciaRssiMejorMinimoDbm, cfg.infraestructuraPermanenciaMinutos,
+            cfg.infraestructuraVigenciaHoras, cfg.aggregationIntervalMinutes, cfg.occupancyHighRatio, cfg.occupancyMediumRatio,
+        ]).toEqual([-45, 2.7, -75, 2, -60, 30, 24, 5, 0.8, 0.5]);
     });
 
     it('SocketConfig toma el origen de la aplicación', () => {

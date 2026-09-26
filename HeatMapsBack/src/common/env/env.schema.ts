@@ -176,6 +176,13 @@ export const envSchema = z.object({
      * usa `range`, kafkajs `RoundRobinAssigner`— el broker ni siquiera admite
      * al backend. Instancias del backend con grupos distintos, en cambio,
      * leerían cada una todos los mensajes y duplicarían las capturas.
+     *
+     * **En desarrollo, usa un grupo propio** (`heatmap-back-local`, por
+     * ejemplo). Arrancar el backend local con el grupo del despliegue deja a los
+     * dos peleándose por la única partición: uno se queda sin ella y cada
+     * arranque o parada reequilibra el grupo y detiene la lectura, hasta que el
+     * atraso acumulado supera {@link KAFKA_MAX_MESSAGE_AGE_SECONDS} y se deja de
+     * guardar capturas. `npm run kafka:atraso` dice cuántos miembros hay.
      */
     KAFKA_GROUP_ID: z.string().min(1),
 
@@ -192,6 +199,10 @@ export const envSchema = z.object({
      * Antigüedad máxima admitida en un mensaje. Los más viejos se descartan
      * para que un reinicio no reprocese horas de lecturas como si fueran
      * actuales.
+     *
+     * Si el consumer se atrasa más que esto, todo lo que lee llega caducado y
+     * deja de guardar capturas; en ese caso se adelanta solo a la cabeza del
+     * topic tras un minuto descartando (ver `kafka-consumer.service.ts`).
      */
     KAFKA_MAX_MESSAGE_AGE_SECONDS: intFromString(60),
 
@@ -266,8 +277,51 @@ export const envSchema = z.object({
      */
     PRESENCIA_RSSI_MINIMO_DBM: floatFromString(-75),
 
+    /**
+     * Cuántos nodos tienen que oír a un dispositivo para contarlo presente.
+     *
+     * Lo que está tras la pared de una esquina lo oye el nodo de esa esquina y
+     * apenas los otros. Con la verdad de referencia —tres dispositivos conocidos
+     * dentro de la sala—, los tres los oyeron los tres nodos, con decenas de
+     * tramas cada uno en diez minutos, mientras que de lo que oía un solo nodo
+     * no había nada dentro. Dos basta: con la condición del nodo que mejor lo
+     * oye, exigir dos o tres dio el mismo resultado, y dos tolera que un nodo se
+     * pierda a alguien que emite poco.
+     */
+    PRESENCIA_NODOS_MINIMOS: intFromString(2),
+
+    /**
+     * Señal mínima en el nodo que **mejor** oye a un dispositivo para contarlo
+     * presente, en dBm.
+     *
+     * Ningún punto de la plazoleta está a más de unos 10,6 m de su nodo más
+     * cercano, así que quien está dentro tiene siempre uno que lo oye bien: un
+     * teléfono en el centro, a 10,2 m de los tres, llegaba a −56. Lo que llega
+     * igual de débil a todos está lejos de todos, en la sala de al lado o en
+     * otro piso. Calibrado con tres dispositivos conocidos dentro: sus mejores
+     * señales iban de −56 a −46; sin esta condición se colaban 121 dispositivos
+     * de fuera, y con ella, cuatro. A −60 queda el mismo margen, 4 dB, a cada
+     * lado. Un dispositivo que emita con poca potencia —un reloj, un teléfono en
+     * reposo— en el centro puede quedarse por debajo; si se pierden, bajarlo.
+     */
+    PRESENCIA_RSSI_MEJOR_MINIMO_DBM: floatFromString(-60),
+
     /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
     INFRAESTRUCTURA_VIGENCIA_HORAS: intFromString(24),
+
+    /**
+     * Minutos seguidos que un dispositivo tiene que oírse pegado a un nodo para
+     * tratarlo como equipamiento del despliegue y dejar de contarlo.
+     *
+     * La Wi-Fi de la Raspberry y el hotspot que le da salida a internet están
+     * junto al nodo durante horas; una persona que pasa al lado, uno o dos
+     * minutos. Marcar por una sola lectura fuerte —como se hacía— sacaba del
+     * conteo durante un día entero a cualquiera que hubiera pasado junto a un
+     * nodo, empezando por el portátil con el que se calibró. Media hora deja
+     * fuera a quien pasa y sólo confunde con equipamiento a quien se quede
+     * media hora sentado contra una antena.
+     */
+    INFRAESTRUCTURA_PERMANENCIA_MINUTOS: intFromString(30),
 
     /** Duración de la ventana de consolidación de ocupación, en minutos. */
     AGGREGATION_INTERVAL_MINUTES: intFromString(5),

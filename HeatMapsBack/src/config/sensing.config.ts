@@ -39,9 +39,24 @@ export class SensingConfig {
         return this.env.get('PRESENCIA_RSSI_MINIMO_DBM');
     }
 
+    /** Nodos que deben oír a un dispositivo para contarlo presente. */
+    get presenciaNodosMinimos(): number {
+        return this.env.get('PRESENCIA_NODOS_MINIMOS');
+    }
+
+    /** Señal mínima en el nodo que mejor oye a un dispositivo para contarlo presente, en dBm. */
+    get presenciaRssiMejorMinimoDbm(): number {
+        return this.env.get('PRESENCIA_RSSI_MEJOR_MINIMO_DBM');
+    }
+
     /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
     get infraestructuraVigenciaHoras(): number {
         return this.env.get('INFRAESTRUCTURA_VIGENCIA_HORAS');
+    }
+
+    /** Minutos seguidos junto a un nodo para tratar un dispositivo como equipamiento. */
+    get infraestructuraPermanenciaMinutos(): number {
+        return this.env.get('INFRAESTRUCTURA_PERMANENCIA_MINUTOS');
     }
 
     /** Duración de la ventana de agregación de ocupación, en minutos. */
