@@ -24,6 +24,8 @@ export const MESSAGES = {
     SERVER: {
         STARTED: 'Servidor iniciado en puerto',
         CONSUMER_STARTED: 'Kafka Consumer iniciado',
+        CONSUMER_DISABLED: 'Ingesta de Kafka desactivada (KAFKA_CONSUMER_ENABLED=false): '
+            + 'otra instancia guarda las capturas y esta sirve lo que hay en la base',
         START_ERROR: 'Error al iniciar consumer',
     },
     WEBSOCKET: {

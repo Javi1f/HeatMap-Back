@@ -4,6 +4,7 @@ import { createServer, Server as HttpServer } from 'http';
 import { container } from 'tsyringe';
 import { createApp } from './app';
 import { AppConfig } from './config/app.config';
+import { KafkaConfig } from './config/kafka.config';
 import { DatabaseConfig } from './config/database.config';
 import { LoggerService } from './common/logger/logger.service';
 import { SocketEmitterService } from './modules/tiempo-real/socket-emitter.service';
@@ -86,7 +87,8 @@ const registerShutdownHooks = (
  *  3. Inicializar la base de datos.
  *  4. Crear el servidor HTTP a partir de `createApp()`.
  *  5. Inicializar el servidor Socket.IO.
- *  6. Arrancar el consumidor de Kafka.
+ *  6. Arrancar el consumidor de Kafka, salvo que la ingesta la haga otra
+ *     instancia (`KAFKA_CONSUMER_ENABLED=false`).
  *  7. Registrar shutdown limpio en SIGINT/SIGTERM.
  *
  * Si cualquier paso crítico falla, loguea el error y marca `process.exitCode = 1`.
@@ -114,11 +116,15 @@ const bootstrap = async (): Promise<void> => {
     });
     logger.info(`${MESSAGES.SERVER.STARTED} ${cfg.port}`);
 
-    try {
-        await consumer.start();
-        logger.info(MESSAGES.SERVER.CONSUMER_STARTED);
-    } catch (err) {
-        logger.error(MESSAGES.SERVER.START_ERROR, err);
+    if (!container.resolve(KafkaConfig).consumerEnabled) {
+        logger.warn(MESSAGES.SERVER.CONSUMER_DISABLED);
+    } else {
+        try {
+            await consumer.start();
+            logger.info(MESSAGES.SERVER.CONSUMER_STARTED);
+        } catch (err) {
+            logger.error(MESSAGES.SERVER.START_ERROR, err);
+        }
     }
 
     // La consolidación de ocupación es independiente del consumer: aunque

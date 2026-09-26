@@ -78,7 +78,7 @@ describe('detectarInfraestructura', () => {
 const senales = (macHash: string, rssiPorNodo: Record<string, number>, esMacRandom = false): SenalPorNodo[] =>
     Object.entries(rssiPorNodo).map(([idSensor, rssi]) => ({ macHash, idSensor, rssi, esMacRandom }));
 
-const CRITERIOS: CriteriosPresencia = { rssiMinimoDbm: -80, nodosMinimos: 2, rssiMejorMinimoDbm: -65, excluidos: new Set() };
+const CRITERIOS: CriteriosPresencia = { rssiMinimoDbm: -80, nodosMinimos: 2, rssiMejorMinimoDbm: -65, ajusteMacAleatoriaDb: 0, excluidos: new Set() };
 
 describe('evaluarPresencia', () => {
     it('cuenta a quien oyen bien todos los nodos', () => {
@@ -162,6 +162,27 @@ describe('evaluarPresencia', () => {
         const exigente = evaluarPresencia(ventana, { ...CRITERIOS, nodosMinimos: 3 });
         expect(exigente.presentes.has('dos-nodos')).toBe(false);
         expect(exigente.descartadosFueraDeZona).toBe(1);
+    });
+
+    /*
+     * Un teléfono emite menos que un portátil y quien lo lleva tapa con el
+     * cuerpo algún enlace. Con el margen, el mismo nivel de señal cuenta si la
+     * MAC es aleatoria —un teléfono— y no si es de fábrica.
+     */
+    it('da a las MAC aleatorias el margen de los teléfonos en los dos umbrales', () => {
+        const conMargen = { ...CRITERIOS, ajusteMacAleatoriaDb: 3 };
+        const debilCerca = { n1: -67, n2: -79 };
+        const atenuadoLejos = { n1: -60, n2: -82 };
+
+        const telefono = evaluarPresencia([...senales('t1', debilCerca, true), ...senales('t2', atenuadoLejos, true)], conMargen);
+        expect([...telefono.presentes.keys()]).toEqual(['t1', 't2']);
+
+        const fijo = evaluarPresencia([...senales('f1', debilCerca), ...senales('f2', atenuadoLejos)], conMargen);
+        expect(fijo.presentes.size).toBe(0);
+        expect(fijo.descartadosFueraDeZona).toBe(2);
+
+        const muyDebil = evaluarPresencia(senales('t3', { n1: -69, n2: -79 }, true), conMargen);
+        expect(muyDebil.presentes.size).toBe(0);
     });
 
     it('conserva si la MAC es aleatoria', () => {

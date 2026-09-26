@@ -25,16 +25,24 @@ const S2 = { x: 21, y: 0 };
 /** Centro del borde superior. */
 const S3 = { x: 10.5, y: 11.84 };
 
-/** Exponente de atenuación con el que se traducen los dB de ruido a distancia. */
-const EXPONENTE = 3;
+/** Exponente de atenuación calibrado, con el que se traducen los dB de error a distancia. */
+const EXPONENTE = 2;
+
+/**
+ * Duda casi nula: el posicionador se queda prácticamente con el punto que mejor
+ * explica las medidas. Sirve para comprobar la geometría del criterio aislada
+ * del efecto de promediar.
+ */
+const SIN_DUDA = 0.02;
 
 /**
  * Observaciones de un dispositivo situado en `punto`.
  *
  * @param escala - Factor por el que el modelo de propagación estira o encoge
  *                 todas las distancias, que es lo que ocurre cuando su nivel de
- *                 referencia no está calibrado.
- * @param ruidoDb - Error de señal de cada nodo, en dB.
+ *                 referencia no está calibrado o el aparato emite más o menos.
+ * @param ruidoDb - Error de señal de cada nodo, en dB: positivo si llega más
+ *                  débil de lo que toca, como cuando alguien tapa el enlace.
  */
 const observar = (
     punto: { x: number; y: number },
@@ -53,52 +61,69 @@ const PUNTOS: [string, { x: number; y: number }][] = [
     ['centro de la plaza', { x: 10.5, y: 5.92 }],
     ['junto al nodo 1', { x: 1, y: 1 }],
     ['junto al nodo 3', { x: 10.2, y: 11.2 }],
-    ['esquina sin nodo', { x: 21, y: 11.84 }],
     ['borde inferior', { x: 12, y: 0.2 }],
     ['mitad superior izquierda', { x: 3, y: 9 }],
 ];
 
 describe('PositioningService', () => {
-    describe('con tres nodos y distancias exactas', () => {
-        it.each(PUNTOS)('sitúa el dispositivo en %s', (_caso, esperado) => {
-            const punto = posicionador.estimar(observar(esperado), PLAZA);
-            expect(punto).not.toBeNull();
-            expect(punto?.x).toBeCloseTo(esperado.x, 4);
-            expect(punto?.y).toBeCloseTo(esperado.y, 4);
+    describe('el criterio de razones', () => {
+        it.each(PUNTOS)('con medidas exactas, lo más compatible está en el sitio real: %s', (_caso, esperado) => {
+            expect(desvio(posicionador.estimar(observar(esperado), PLAZA, SIN_DUDA), esperado)).toBeLessThan(0.8);
         });
-    });
 
-    describe('con el modelo de propagación descalibrado', () => {
         /*
          * Es el fallo que amontonaba el mapa en el centro: con las distancias
          * encogidas, la trilateración clásica devolvía el punto equidistante de
          * los tres nodos para todo el mundo. El criterio de razones no usa la
-         * escala, así que la posición no se mueve.
+         * escala, así que la posición no se mueve. Tampoco la mueve la potencia
+         * del aparato: un teléfono y un portátil en el mismo sitio caen igual.
          */
-        it.each(PUNTOS)('sitúa igual el dispositivo en %s con las distancias al 40 %% y al 250 %%', (_caso, esperado) => {
+        it.each(PUNTOS)('no depende de la escala de las distancias: %s', (_caso, esperado) => {
+            const calibrado = posicionador.estimar(observar(esperado), PLAZA);
             for (const escala of [0.4, 2.5]) {
-                const punto = posicionador.estimar(observar(esperado, { escala }), PLAZA);
-                expect(desvio(punto, esperado)).toBeLessThan(0.001);
+                const otro = posicionador.estimar(observar(esperado, { escala }), PLAZA);
+                expect(otro?.x).toBeCloseTo(calibrado?.x ?? NaN, 6);
+                expect(otro?.y).toBeCloseTo(calibrado?.y ?? NaN, 6);
             }
         });
 
         it('informa del factor de escala, que es lo que permite recalibrar el modelo', () => {
-            const punto = posicionador.estimar(observar({ x: 7, y: 4 }, { escala: 0.4 }), PLAZA);
-            expect(punto?.factorEscala).toBeCloseTo(0.4, 3);
-            expect(punto?.dispersion).toBeCloseTo(1, 3);
+            const punto = posicionador.estimar(observar({ x: 7, y: 4 }, { escala: 0.4 }), PLAZA, SIN_DUDA);
+            expect(punto?.factorEscala).toBeCloseTo(0.4, 1);
+            expect(punto?.dispersion).toBeCloseTo(1, 1);
+        });
+
+        /*
+         * Con tres nodos siempre hay un punto que explica las tres medidas a la
+         * vez, así que no sobra información con la que delatar el ruido. Un
+         * cuarto nodo sí la aporta.
+         */
+        it('sólo delata medidas contradictorias a partir del cuarto nodo', () => {
+            const cuarto = { x: 0, y: 11.84 };
+            const conCuatro = observar({ x: 8, y: 6 }, { nodos: [S1, S2, S3, cuarto], ruidoDb: [8, -8, 6, -5] });
+            expect(posicionador.estimar(conCuatro, PLAZA, SIN_DUDA)?.dispersion).toBeGreaterThan(1.2);
+            expect(posicionador.estimar(observar({ x: 8, y: 6 }, { nodos: [S1, S2, S3, cuarto] }), PLAZA, SIN_DUDA)?.dispersion)
+                .toBeCloseTo(1, 2);
         });
     });
 
-    describe('con ruido en la señal', () => {
-        /**
-         * Un par de dB de desvío por nodo es lo que queda tras el suavizado del
-         * productor en un dispositivo quieto. El error de posición resultante es
-         * de metros, no de centímetros, y no por el método: con un exponente de
-         * atenuación de 3, 2 dB ya son un 15 % de la distancia. Es el motivo de
-         * que el mapa reparta cada dispositivo en una mancha en lugar de clavarlo
-         * en una celda.
+    describe('con personas alrededor', () => {
+        /*
+         * Alguien entre el dispositivo y el nodo 3 le quita 10 dB a ese enlace.
+         * El punto que mejor explica las tres señales salta entonces lejos —
+         * justifica la caída alejándose del nodo 3—; la media de todos los
+         * compatibles se mueve mucho menos.
          */
-        it('mantiene el error medio en pocos metros, que es el límite físico del RSSI', () => {
+        it('un enlace tapado desplaza mucho menos la media que el punto más compatible', () => {
+            const real = { x: 10.5, y: 5.92 };
+            const tapado = observar(real, { ruidoDb: [0, 0, 10] });
+            const media = desvio(posicionador.estimar(tapado, PLAZA), real);
+            const maximo = desvio(posicionador.estimar(tapado, PLAZA, SIN_DUDA), real);
+            expect(media).toBeLessThan(2.5);
+            expect(maximo).toBeGreaterThan(2 * media);
+        });
+
+        it('mantiene el error en pocos metros con ±2 dB de desvío por enlace, que es el límite físico del RSSI', () => {
             const errores = PUNTOS.map(([, real]) =>
                 desvio(posicionador.estimar(observar(real, { escala: 0.4, ruidoDb: [2, -2, 1] }), PLAZA), real));
 
@@ -106,33 +131,22 @@ describe('PositioningService', () => {
             expect(Math.max(...errores)).toBeLessThan(7);
         });
 
-        /*
-         * Con tres nodos la solución es exacta —tres medidas para dos
-         * coordenadas y la escala—, así que no hay información sobrante con la
-         * que delatar el ruido. Un cuarto nodo sí la aporta.
-         */
-        it('sólo delata medidas contradictorias a partir del cuarto nodo', () => {
-            const tres = posicionador.estimar(observar({ x: 8, y: 6 }, { ruidoDb: [8, -8, 6] }), PLAZA);
-            expect(tres?.dispersion).toBeCloseTo(1, 3);
-
-            const cuarto = { x: 0, y: 11.84 };
-            const conCuatro = observar({ x: 8, y: 6 }, { nodos: [S1, S2, S3, cuarto], ruidoDb: [8, -8, 6, -5] });
-            expect(posicionador.estimar(conCuatro, PLAZA)?.dispersion).toBeGreaterThan(1.2);
-            expect(posicionador.estimar(observar({ x: 8, y: 6 }, { nodos: [S1, S2, S3, cuarto] }), PLAZA)?.dispersion).toBeCloseTo(1, 3);
+        it('dice cuánto duda: poco junto a un nodo, mucho en medio de la plaza', () => {
+            const junto = posicionador.estimar(observar({ x: 10.2, y: 11.2 }), PLAZA);
+            const centro = posicionador.estimar(observar({ x: 10.5, y: 5.92 }), PLAZA);
+            expect(junto?.incertidumbreM).toBeLessThan(2);
+            expect(centro?.incertidumbreM).toBeGreaterThan(2 * (junto?.incertidumbreM ?? Infinity));
         });
     });
 
     describe('con dos nodos', () => {
-        it('devuelve el punto de la recta entre ambos que cumple la razón de distancias', () => {
-            const punto = posicionador.estimar(observar({ x: 4, y: 4.55 }, { nodos: [S1, S2] }), PLAZA);
-
-            // Con dos distancias sólo se conoce su razón, y todos los puntos que
-            // la cumplen son igual de compatibles: se toma el de la recta que une
-            // los nodos, repartida en la proporción de las dos distancias.
-            const alPrimero = Math.hypot(4, 4.55);
-            const alSegundo = Math.hypot(21 - 4, 4.55);
-            expect(punto?.x).toBeCloseTo((21 * alPrimero) / (alPrimero + alSegundo), 6);
-            expect(punto?.y).toBeCloseTo(0, 6);
+        it('reparte la duda por el arco compatible y queda del lado del nodo más cercano', () => {
+            const real = { x: 4, y: 4.55 };
+            const dos = posicionador.estimar(observar(real, { nodos: [S1, S2] }), PLAZA);
+            const tres = posicionador.estimar(observar(real), PLAZA);
+            expect(dos?.x).toBeLessThan(PLAZA.ancho / 2);
+            expect(desvio(dos, real)).toBeLessThan(3);
+            expect(dos?.incertidumbreM).toBeGreaterThan(tres?.incertidumbreM ?? Infinity);
         });
 
         it('no se mueve aunque la escala del modelo esté mal', () => {

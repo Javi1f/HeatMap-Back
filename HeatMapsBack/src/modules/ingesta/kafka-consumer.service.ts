@@ -108,6 +108,9 @@ const saltosHastaLoVigente = (
  *  4. Validar su estructura (`validarLectura`, etapa «Valida estructura» del
  *     diagrama de secuencia) y descartar la que no la cumpla.
  *  5. Delegar filtrado, anonimización y persistencia a {@link DataProcessorService}.
+ *     Ese paso no espera a la base —las capturas van a un búfer de escritura—,
+ *     así que el consumer lee al ritmo de Kafka aunque la red hasta la base sea
+ *     lenta, y un mensaje sólo caduca si el backend estuvo parado.
  *  6. Difundir el resumen a clientes WebSocket vía {@link SocketEmitterService}.
  *
  * NO contiene lógica de negocio sobre los datos en sí — solo orquesta el
@@ -214,7 +217,8 @@ export class KafkaConsumerService {
     }
 
     /**
-     * Detiene el consumidor. Idempotente.
+     * Detiene el consumidor y escribe las capturas que queden en el búfer.
+     * Idempotente.
      */
     async stop(): Promise<void> {
         if (this.reintento) {
@@ -228,6 +232,7 @@ export class KafkaConsumerService {
         await this.consumer.disconnect();
         this.consumer = null;
         this.isRunning = false;
+        await this.processor.terminar();
         this.logger.info(MESSAGES.CONSUMER.STOPPED);
     }
 

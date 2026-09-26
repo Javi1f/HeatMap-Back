@@ -118,6 +118,13 @@ export interface CriteriosPresencia {
      */
     rssiMejorMinimoDbm: number;
 
+    /**
+     * dB que se rebajan los dos umbrales de señal para los dispositivos con MAC
+     * aleatoria, que son los teléfonos que lleva la gente (ver
+     * `PRESENCIA_AJUSTE_MAC_ALEATORIA_DB`).
+     */
+    ajusteMacAleatoriaDb: number;
+
     /** Hashes de infraestructura vigente, que nunca cuentan como ocupantes. */
     excluidos: ReadonlySet<string>;
 }
@@ -175,14 +182,15 @@ type Veredicto = 'infraestructura' | 'fuera' | 'presente';
  */
 const clasificar = (
     macHash: string,
-    { rssi }: SenalesDeDispositivo,
+    { rssi, esMacRandom }: SenalesDeDispositivo,
     nodosActivos: number,
     criterios: CriteriosPresencia,
 ): Veredicto => {
     if (criterios.excluidos.has(macHash)) return 'infraestructura';
+    const margen = esMacRandom ? criterios.ajusteMacAleatoriaDb : 0;
     const loOyenBastantes = rssi.length >= Math.min(criterios.nodosMinimos, nodosActivos);
-    const alguienLoOyeCerca = Math.max(...rssi) >= criterios.rssiMejorMinimoDbm;
-    const nadieLoOyeAtenuado = Math.min(...rssi) >= criterios.rssiMinimoDbm;
+    const alguienLoOyeCerca = Math.max(...rssi) >= criterios.rssiMejorMinimoDbm - margen;
+    const nadieLoOyeAtenuado = Math.min(...rssi) >= criterios.rssiMinimoDbm - margen;
     return loOyenBastantes && alguienLoOyeCerca && nadieLoOyeAtenuado ? 'presente' : 'fuera';
 };
 
@@ -207,6 +215,14 @@ const clasificar = (
  * los oía estaba entre −56 y −46 dBm. Con las condiciones 1 y 3 solas se
  * colaban 121 dispositivos de fuera; con la 2, cuatro, dos de ellos
  * equipamiento pegado a un nodo que corresponde a la regla de infraestructura.
+ *
+ * **Los teléfonos tienen 3 dB de margen** (`ajusteMacAleatoriaDb`) en las
+ * condiciones 2 y 3. Emiten unos 12 dB menos que un portátil y quien los lleva
+ * tapa con el cuerpo algún enlace, así que con los mismos umbrales que un
+ * portátil sólo contaban dos de cada tres personas, y una de cada dos con el
+ * cuerpo en medio. Se reconocen por la MAC aleatoria, que es lo que usan los
+ * teléfonos por defecto; los equipos fijos de las oficinas de alrededor suelen
+ * llevar la de fábrica y emitir más fuerte, así que no se les rebaja nada.
  *
  * **Cuántos nodos deben oírlo** lo decide `nodosMinimos`, y nunca se exigen más
  * de los que emitieron en la ventana: si un nodo se cae, exigirlo dejaría el

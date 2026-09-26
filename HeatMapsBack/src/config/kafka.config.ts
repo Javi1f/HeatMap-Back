@@ -21,6 +21,9 @@ export class KafkaConfig {
     /** Antiguedad maxima admitida en un mensaje, en segundos. */
     public readonly maxMessageAgeSeconds: number;
 
+    /** `true` si esta instancia ingiere; ver `KAFKA_CONSUMER_ENABLED`. */
+    public readonly consumerEnabled: boolean;
+
     /** Autoridad certificadora del broker. */
     private readonly _ca: Buffer;
 
@@ -35,6 +38,7 @@ export class KafkaConfig {
         this.topic = env.get('KAFKA_TOPIC').trim();
         this.groupId = env.get('KAFKA_GROUP_ID').trim();
         this.maxMessageAgeSeconds = env.get('KAFKA_MAX_MESSAGE_AGE_SECONDS');
+        this.consumerEnabled = env.get('KAFKA_CONSUMER_ENABLED');
 
         this._ca = Buffer.from(env.get('KAFKA_SSL_CA'), 'base64');
         this._cert = Buffer.from(env.get('KAFKA_SSL_CERT'), 'base64');

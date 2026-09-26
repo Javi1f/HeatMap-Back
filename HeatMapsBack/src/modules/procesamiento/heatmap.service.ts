@@ -8,6 +8,7 @@ import {
     Observacion,
     PositioningService,
     Punto,
+    RUIDO_ENLACE_DB,
 } from './positioning.service';
 import { DistanceEstimatorService } from './distance-estimator.service';
 import { PresenciaService } from './presencia.service';
@@ -378,7 +379,7 @@ export class HeatmapService {
      */
     private situar(obs: readonly Observacion[], limites: Limites): { punto: Punto; escala: number | null } | null {
         if (obs.length === 1) return { punto: obs[0], escala: null };
-        const estimacion = this.posicionador.estimar(obs, limites);
+        const estimacion = this.posicionador.estimar(obs, limites, this.distancias.aLogDistancia(RUIDO_ENLACE_DB));
         return estimacion && { punto: estimacion, escala: estimacion.factorEscala };
     }
 

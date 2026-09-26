@@ -1,7 +1,7 @@
 import { singleton } from 'tsyringe';
 import { LoggerService } from '../../common/logger/logger.service';
 import { LecturaSensor } from '../../types/sensor.types';
-import { CapturaInsert, CapturaRepository } from '../../persistencia/repositorios/captura.repository';
+import { CapturaInsert } from '../../persistencia/repositorios/captura.repository';
 import { SensorRepository } from '../../persistencia/repositorios/sensor.repository';
 import { ZonaRepository } from '../../persistencia/repositorios/zona.repository';
 import { DistanceEstimatorService } from '../procesamiento/distance-estimator.service';
@@ -9,6 +9,7 @@ import { PresenciaService } from '../procesamiento/presencia.service';
 import { detectarInfraestructura } from '../procesamiento/presencia';
 import { MacAnonymizerService } from '../anonimizacion/mac-anonymizer.service';
 import { filtrarMacs, totalDescartes } from './filtro-mac';
+import { EscrituraCapturasService } from './escritura-capturas.service';
 
 /**
  * Intervalo mínimo entre dos actualizaciones de la última conexión de un nodo.
@@ -30,7 +31,8 @@ const TOQUE_MINIMO_MS = 30_000;
  *     «Sin asignar» si es la primera vez que se le ve).
  *  3. Anonimiza cada MAC con HMAC antes de tocar la base de datos (RF-02).
  *  4. Estima la distancia desde el RSSI con el modelo logarítmico.
- *  5. Inserta el lote completo de detecciones.
+ *  5. Entrega el lote de detecciones al búfer de escritura
+ *     ({@link EscrituraCapturasService}), que las inserta aparte.
  *
  * La agregación por zona **no** ocurre aquí: la hace `OccupancyAggregatorService`
  * en ventanas cerradas. Mezclar ambas cosas obligaría a recalcular la ventana
@@ -52,7 +54,7 @@ export class DataProcessorService {
     private readonly ultimoToque = new Map<string, number>();
 
     constructor(
-        private readonly capturas: CapturaRepository,
+        private readonly escritura: EscrituraCapturasService,
         private readonly sensores: SensorRepository,
         private readonly zonas: ZonaRepository,
         private readonly anonymizer: MacAnonymizerService,
@@ -73,12 +75,13 @@ export class DataProcessorService {
      * y el resultado no debe depender de que el productor la haya interpretado
      * bien.
      *
-     * Los errores se propagan al consumidor de Kafka, que los captura por
-     * mensaje: una lectura mal formada no debe tumbar el consumer ni impedir
-     * que se emita por WebSocket.
+     * No espera a la base: las capturas quedan en el búfer de escritura. Sólo
+     * la primera lectura de un nodo desconocido consulta la base antes de
+     * volver, para darlo de alta. Los errores de esa consulta se propagan al
+     * consumidor de Kafka, que los captura por mensaje.
      *
      * @param lectura - Lectura de un nodo, ya validada.
-     * @returns Dispositivos guardados, tras el filtrado.
+     * @returns Dispositivos aceptados tras el filtrado, ya en el búfer de escritura.
      */
     async processAndSave(lectura: LecturaSensor): Promise<number> {
         const { dispositivos, descartes } = filtrarMacs(lectura.dispositivos);
@@ -110,16 +113,17 @@ export class DataProcessorService {
         const infraestructura = [...detectarInfraestructura(dispositivos)]
             .map(([mac, motivo]) => ({ macHash: this.anonymizer.hash(mac), motivo }));
 
-        // Las dos escrituras son independientes y van a la vez: con la base al
-        // otro lado de una red lenta, cada ida y vuelta cuenta, y este camino
-        // tiene que seguir el ritmo de los nodos. `anotarInfraestructura` no
-        // lanza nunca, así que un fallo sólo puede venir de la inserción.
-        const [inserted] = await Promise.all([
-            this.capturas.insertMany(rows),
-            this.presencia.anotarInfraestructura(infraestructura, seenAt),
-        ]);
-        this.logger.debug(`Persistidas ${inserted} detecciones de sensor=${lectura.sensorId}`);
+        // Nada de lo que sigue se espera: este camino tiene que ir al ritmo de
+        // Kafka, no al de la base. Las capturas van al búfer de escritura, y
+        // `anotarInfraestructura` no lanza nunca.
+        this.escritura.encolar(rows);
+        void this.presencia.anotarInfraestructura(infraestructura, seenAt);
         return dispositivos.length;
+    }
+
+    /** Escribe las capturas pendientes; se llama al detener la ingesta. */
+    async terminar(): Promise<void> {
+        await this.escritura.terminar();
     }
 
     /**
@@ -141,6 +145,10 @@ export class DataProcessorService {
         const ahora = Date.now();
         if (ahora - (this.ultimoToque.get(idSensor) ?? 0) < TOQUE_MINIMO_MS) return;
         this.ultimoToque.set(idSensor, ahora);
-        await this.sensores.touch(idSensor, seenAt);
+        // Tampoco se espera: es una marca informativa y un fallo no debe
+        // frenar la ingesta.
+        this.sensores.touch(idSensor, seenAt).catch((err: unknown) => {
+            this.logger.error(`No se pudo actualizar la última conexión de ${idSensor}`, err);
+        });
     }
 }

@@ -21,8 +21,8 @@ describe('DataProcessorService', () => {
     /** `DataProcessorService` con repositorios, anonimizador y estimador falsos. */
     const crear = () => {
         const dobles = {
-            capturas: { insertMany: vi.fn((filas: unknown[]) => Promise.resolve(filas.length)) },
-            sensores: { findById: vi.fn(() => Promise.resolve({ idSensor: 'nodo-1' })), create: vi.fn(), touch: vi.fn() },
+            escritura: { encolar: vi.fn(), terminar: vi.fn(() => Promise.resolve()) },
+            sensores: { findById: vi.fn(() => Promise.resolve({ idSensor: 'nodo-1' })), create: vi.fn(), touch: vi.fn(() => Promise.resolve()) },
             zonas: { findOrCreateDefault: vi.fn(() => Promise.resolve({ idZona: 'z0', nombre: 'Sin asignar' })) },
             anonymizer: { hash: vi.fn((mac: string) => `hash(${mac})`), isRandomized: vi.fn((mac: string) => mac.startsWith('02')) },
             distance: { estimate: vi.fn(() => 2.5) },
@@ -30,7 +30,7 @@ describe('DataProcessorService', () => {
             logger: loggerFalso(),
         };
         const servicio = new DataProcessorService(
-            dobles.capturas as never, dobles.sensores as never, dobles.zonas as never, dobles.anonymizer as never,
+            dobles.escritura as never, dobles.sensores as never, dobles.zonas as never, dobles.anonymizer as never,
             dobles.distance as never, dobles.presencia as never, dobles.logger,
         );
         return { servicio, ...dobles };
@@ -40,7 +40,7 @@ describe('DataProcessorService', () => {
         const entorno = crear();
         await expect(entorno.servicio.processAndSave(lectura([]))).resolves.toBe(0);
         await expect(entorno.servicio.processAndSave(lectura([dispositivo('no-es-una-mac', -60)]))).resolves.toBe(0);
-        expect(entorno.capturas.insertMany).not.toHaveBeenCalled();
+        expect(entorno.escritura.encolar).not.toHaveBeenCalled();
         expect(entorno.sensores.findById).not.toHaveBeenCalled();
     });
 
@@ -51,7 +51,7 @@ describe('DataProcessorService', () => {
             dispositivo('10:00:00:00:00:02', -70, { canal: 0, tipoTrama: 'desconocido' }),
         ]));
 
-        const filas = entorno.capturas.insertMany.mock.calls[0][0] as Record<string, unknown>[];
+        const filas = entorno.escritura.encolar.mock.calls[0][0] as Record<string, unknown>[];
         const momento = new Date(1_789_000_000 * 1000);
         expect(guardados).toBe(2);
         // La MAC llega al anonimizador ya en forma canónica, tras el filtrado.
@@ -72,7 +72,7 @@ describe('DataProcessorService', () => {
             dispositivo('10:00:00', -60),
         ]));
 
-        const filas = entorno.capturas.insertMany.mock.calls[0][0] as Record<string, unknown>[];
+        const filas = entorno.escritura.encolar.mock.calls[0][0] as Record<string, unknown>[];
         expect(guardados).toBe(1);
         expect(filas).toHaveLength(1);
         expect(filas[0]).toMatchObject({ macHash: 'hash(100000000002)', rssi: -58 });
@@ -86,6 +86,18 @@ describe('DataProcessorService', () => {
             [{ macHash: 'hash(100000000009)', motivo: 'junto-a-nodo' }],
             new Date(1_789_000_000 * 1000),
         );
+    });
+
+    it('no espera a la base: las capturas van al búfer y un fallo de la última conexión sólo se registra', async () => {
+        const entorno = crear();
+        entorno.sensores.touch.mockRejectedValueOnce(new Error('base caída'));
+        await expect(entorno.servicio.processAndSave(lectura([dispositivo('10:00:00:00:00:01', -60)]))).resolves.toBe(1);
+        await Promise.resolve();
+        expect(entorno.escritura.encolar).toHaveBeenCalledOnce();
+        expect(entorno.logger.error).toHaveBeenCalledWith(expect.stringContaining('nodo-1'), expect.any(Error));
+
+        await entorno.servicio.terminar();
+        expect(entorno.escritura.terminar).toHaveBeenCalledOnce();
     });
 
     it('registra un nodo nuevo en la zona «Sin asignar» una sola vez', async () => {

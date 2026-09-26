@@ -61,4 +61,16 @@ export class DistanceEstimatorService {
         if (!Number.isFinite(factorEscala) || factorEscala <= 0) return null;
         return Math.round(10 * this.cfg.pathLossExponent * Math.log10(factorEscala) * 10) / 10;
     }
+
+    /**
+     * Traduce un error de señal en dB al error que produce en el logaritmo
+     * natural de la distancia, que es la unidad en la que trabaja el
+     * posicionador. Depende del exponente: con n = 2, 4 dB son un 58 % de
+     * distancia; con n = 3, un 36 %.
+     *
+     * @param db - Error de señal, en dB.
+     */
+    aLogDistancia(db: number): number {
+        return (db * Math.LN10) / (10 * this.cfg.pathLossExponent);
+    }
 }

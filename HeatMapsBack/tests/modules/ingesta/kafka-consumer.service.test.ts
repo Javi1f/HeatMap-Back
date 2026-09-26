@@ -79,7 +79,7 @@ const cfg = { brokers: ['b:9093'], ssl: { rejectUnauthorized: true }, groupId: '
 const crear = () => {
     const dobles = {
         cipher: { decrypt: vi.fn() },
-        processor: { processAndSave: vi.fn(() => Promise.resolve(1)) },
+        processor: { processAndSave: vi.fn(() => Promise.resolve(1)), terminar: vi.fn(() => Promise.resolve()) },
         emitter: { emitSensorData: vi.fn() },
         logger: loggerFalso(),
     };
@@ -119,6 +119,7 @@ describe('KafkaConsumerService: ciclo de vida', () => {
 
         await entorno.servicio.stop();
         expect(ultimo().disconnect).toHaveBeenCalledOnce();
+        expect(entorno.processor.terminar).toHaveBeenCalledOnce();
         expect(entorno.servicio.running).toBe(false);
         await entorno.servicio.stop();
         expect(entorno.logger.warn).toHaveBeenCalledWith(MESSAGES.CONSUMER.NOT_RUNNING);

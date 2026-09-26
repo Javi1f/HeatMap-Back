@@ -115,6 +115,8 @@ describe('Objetos de configuración', () => {
         expect(cfg.topic).toBe('t');
         expect(cfg.groupId).toBe('g');
         expect(cfg.maxMessageAgeSeconds).toEqual(expect.any(Number));
+        expect(cfg.consumerEnabled).toBe(true);
+        expect(new KafkaConfig(envCon({ KAFKA_CONSUMER_ENABLED: false })).consumerEnabled).toBe(false);
         expect(cfg.ssl).toEqual({ rejectUnauthorized: true, ca: [Buffer.from('ca\n')], cert: Buffer.from('cert\n'), key: Buffer.from('key\n') });
     });
 
@@ -127,12 +129,14 @@ describe('Objetos de configuración', () => {
     it('SensingConfig expone los parámetros del modelo', () => {
         const cfg = new SensingConfig(envCon({
             RSSI_REFERENCE_DBM: -45, PATH_LOSS_EXPONENT: 2.7, PRESENCIA_RSSI_MINIMO_DBM: -75, PRESENCIA_NODOS_MINIMOS: 2, PRESENCIA_RSSI_MEJOR_MINIMO_DBM: -60, INFRAESTRUCTURA_PERMANENCIA_MINUTOS: 30,
+            PRESENCIA_AJUSTE_MAC_ALEATORIA_DB: 3,
             INFRAESTRUCTURA_VIGENCIA_HORAS: 24, AGGREGATION_INTERVAL_MINUTES: 5, OCCUPANCY_HIGH_RATIO: 0.8, OCCUPANCY_MEDIUM_RATIO: 0.5,
         }));
         expect(cfg.macHashKey).toHaveLength(32);
         expect([cfg.rssiReferenceDbm, cfg.pathLossExponent, cfg.presenciaRssiMinimoDbm, cfg.presenciaNodosMinimos, cfg.presenciaRssiMejorMinimoDbm, cfg.infraestructuraPermanenciaMinutos,
             cfg.infraestructuraVigenciaHoras, cfg.aggregationIntervalMinutes, cfg.occupancyHighRatio, cfg.occupancyMediumRatio,
-        ]).toEqual([-45, 2.7, -75, 2, -60, 30, 24, 5, 0.8, 0.5]);
+            cfg.presenciaAjusteMacAleatoriaDb,
+        ]).toEqual([-45, 2.7, -75, 2, -60, 30, 24, 5, 0.8, 0.5, 3]);
     });
 
     it('SocketConfig toma el origen de la aplicación', () => {

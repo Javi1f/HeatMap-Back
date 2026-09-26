@@ -206,6 +206,21 @@ export const envSchema = z.object({
      */
     KAFKA_MAX_MESSAGE_AGE_SECONDS: intFromString(60),
 
+    /**
+     * Si esta instancia consume Kafka y guarda las capturas.
+     *
+     * Por cada base de datos debe ingerir **una sola** instancia. Dos
+     * instancias con grupos de consumidores distintos reciben cada una todos
+     * los mensajes y los guardarían dos veces; con el mismo grupo, una de ellas
+     * se queda sin partición y no hace nada. Las demás instancias —un backend
+     * local de pruebas mientras el desplegado ingiere, por ejemplo— van con
+     * `false`: sirven la API y el mapa a partir de la base, que se actualiza
+     * sola. Además, un backend conectado por un hotspot móvil no puede
+     * descargar el topic al ritmo de los nodos, y al intentarlo le quita ancho
+     * de banda a los propios nodos, que publican por la misma conexión.
+     */
+    KAFKA_CONSUMER_ENABLED: boolFromString(true),
+
     /** Primera clave AES-256-CTR de la cascada de cifrado de Kafka. */
     AES_KEY_1: hexKey(32),
 
@@ -247,18 +262,32 @@ export const envSchema = z.object({
     MAC_HASH_KEY: hexKey(32),
 
     /**
-     * Potencia recibida de referencia a un metro, en dBm.
+     * Potencia recibida de referencia a un metro, en dBm, **del aparato típico:
+     * un teléfono**.
      *
-     * Valor inicial tomado de literatura; se recalibra por espacio durante las
-     * pruebas, ya que depende de la antena y de la altura del nodo.
+     * Medido en la plazoleta el 26-09-2026. Un portátil en puntos conocidos dio
+     * −28,6 dBm, pero emite unos 11 dB más que un teléfono: el iPhone del
+     * despliegue, en un punto conocido, salía a −41, y el desajuste que mide el
+     * propio mapa sobre los dispositivos presentes (`desajusteReferenciaDb`,
+     * casi todos teléfonos) pedía restar 10,7 dB a −29. Por eso −40.
+     *
+     * No mueve el mapa —el posicionador trabaja con razones de distancias y le
+     * da igual la potencia de cada aparato—, pero sí la distancia en metros que
+     * se guarda con cada captura y el aviso de desajuste.
      */
     RSSI_REFERENCE_DBM: floatFromString(-40),
 
     /**
      * Exponente de atenuación del entorno: en torno a 2 en espacio libre y
      * entre 2,7 y 4 en interiores con obstrucción.
+     *
+     * Calibrado el 26-09-2026 con un portátil pegado a cada nodo y en el borde
+     * sur: con 3, el valor de literatura de interiores, el error medio de
+     * posición era 1,70 m (máximo 2,7 m); con 2, 1,29 m (máximo 1,8 m). No
+     * depende de la potencia del aparato, así que vale igual para teléfonos. La
+     * plazoleta es un espacio abierto con línea de vista entre los nodos.
      */
-    PATH_LOSS_EXPONENT: floatFromString(3.0),
+    PATH_LOSS_EXPONENT: floatFromString(2.0),
 
     /**
      * Señal mínima, en el nodo que **peor** oye a un dispositivo, para contarlo
@@ -306,6 +335,22 @@ export const envSchema = z.object({
      */
     PRESENCIA_RSSI_MEJOR_MINIMO_DBM: floatFromString(-60),
 
+    /**
+     * dB que se rebajan `PRESENCIA_RSSI_MINIMO_DBM` y
+     * `PRESENCIA_RSSI_MEJOR_MINIMO_DBM` para los dispositivos con MAC
+     * aleatoria, es decir, los teléfonos.
+     *
+     * Medido el 26-09-2026 con las lecturas de un portátil en posiciones
+     * conocidas llevadas al nivel de un teléfono (−12 dB, lo que emitía el
+     * iPhone del despliegue): con los umbrales sin rebajar contaba como
+     * presente el 65 % de las veces, y el 49 % con un cuerpo tapando un nodo.
+     * Con 3 dB, el 91 % y el 69 %. El precio, sobre dos horas en las que dentro
+     * sólo estaba el equipo del proyecto: un dispositivo persistente de fuera
+     * más y tres esporádicos más. Con 6 dB se colaban tres persistentes —los
+     * teléfonos de las oficinas de al lado también tienen MAC aleatoria—.
+     */
+    PRESENCIA_AJUSTE_MAC_ALEATORIA_DB: floatFromString(3),
+
     /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
     INFRAESTRUCTURA_VIGENCIA_HORAS: intFromString(24),
 
@@ -317,11 +362,13 @@ export const envSchema = z.object({
      * junto al nodo durante horas; una persona que pasa al lado, uno o dos
      * minutos. Marcar por una sola lectura fuerte —como se hacía— sacaba del
      * conteo durante un día entero a cualquiera que hubiera pasado junto a un
-     * nodo, empezando por el portátil con el que se calibró. Media hora deja
-     * fuera a quien pasa y sólo confunde con equipamiento a quien se quede
-     * media hora sentado contra una antena.
+     * nodo, empezando por el portátil con el que se calibró. Una hora deja
+     * fuera a quien pasa y a quien se sienta un rato junto a un nodo; sólo
+     * confunde con equipamiento a quien se quede más de una hora contra una
+     * antena. Como cada marca se renueva cada 10 minutos, la exclusión llega
+     * entre los 60 y los 70 minutos de racha.
      */
-    INFRAESTRUCTURA_PERMANENCIA_MINUTOS: intFromString(30),
+    INFRAESTRUCTURA_PERMANENCIA_MINUTOS: intFromString(60),
 
     /** Duración de la ventana de consolidación de ocupación, en minutos. */
     AGGREGATION_INTERVAL_MINUTES: intFromString(5),

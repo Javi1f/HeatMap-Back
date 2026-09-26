@@ -36,6 +36,7 @@ const crear = () => {
         distancias: {
             estimate: vi.fn(distanciaDe),
             desajusteDb: vi.fn(() => 6.4),
+            aLogDistancia: vi.fn(() => 0.46),
         },
         logger: loggerFalso(),
     };
@@ -125,6 +126,9 @@ describe('HeatmapService', () => {
         // Los dos caen en la celda (2,0-2,5; 1,0-1,5): fila 2, columna 4.
         expect(ocupadas(mapa.rejilla)).toEqual([[2, 4, 2]]);
         expect(entorno.posicionador.estimar).toHaveBeenCalledTimes(2);
+        // La duda de cada enlace se traduce con el exponente en uso, no con uno fijo.
+        expect(entorno.distancias.aLogDistancia).toHaveBeenCalledWith(4);
+        expect(entorno.posicionador.estimar).toHaveBeenCalledWith(expect.any(Array), expect.any(Object), 0.46);
     });
 
     it.each([

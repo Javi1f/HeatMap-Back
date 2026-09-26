@@ -100,6 +100,7 @@ export class PresenciaService {
             rssiMinimoDbm: this.cfg.presenciaRssiMinimoDbm,
             nodosMinimos: this.cfg.presenciaNodosMinimos,
             rssiMejorMinimoDbm: this.cfg.presenciaRssiMejorMinimoDbm,
+            ajusteMacAleatoriaDb: this.cfg.presenciaAjusteMacAleatoriaDb,
             excluidos,
         };
         return new Map([...porZona].map(([zona, deLaZona]) => [zona, evaluarPresencia(deLaZona, criterios)]));

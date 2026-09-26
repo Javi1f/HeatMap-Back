@@ -105,6 +105,7 @@ export const medir = async (macHash: string): Promise<void> => {
         rssiMinimoDbm: cfg.presenciaRssiMinimoDbm,
         nodosMinimos: cfg.presenciaNodosMinimos,
         rssiMejorMinimoDbm: cfg.presenciaRssiMejorMinimoDbm,
+        ajusteMacAleatoriaDb: cfg.presenciaAjusteMacAleatoriaDb,
         excluidos,
     };
     const presente = evaluarPresencia(deLaZona, criterios).presentes.has(macHash);
