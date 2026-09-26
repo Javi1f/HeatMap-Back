@@ -43,15 +43,36 @@ Kafka ─▶ KafkaConsumerService.leer
          ─▶ DataProcessorService.processAndSave
            ├─ filtrarMacs            mal formadas, de grupo, duplicadas (RF-11)
            ├─ MacAnonymizerService   la MAC nunca se guarda en claro
-           └─ CapturaRepository      persistencia
+           └─ EscrituraCapturas      búfer: no espera a la base
          ─▶ SocketEmitterService     resumen sin identificadores
+
+EscrituraCapturas ─▶ CapturaRepository   lotes de 2 000 filas, 2 a la vez
 ```
+
+El consumer no espera a la base. Cada lectura trae del orden de 500
+detecciones y llegan unas 50 por minuto; con la base al otro lado de una red
+lenta, esperar cada escritura hacía que el consumer se quedara atrás y los
+mensajes caducaran. El búfer tiene techo: si la base no da abasto, descarta lo
+más antiguo con aviso y el sistema sigue en tiempo real.
 
 El procesamiento (presencia, posición, mapa de calor, ocupación) trabaja sobre
 lo ya guardado, en `modules/procesamiento/`.
 
 Al unirse al grupo de consumidores, el backend salta los mensajes más antiguos
 que la ventana de vigencia, para no reprocesar una cola atrasada al arrancar.
+
+## Una sola instancia ingiere
+
+Cada base de datos debe tener **un único** backend consumiendo Kafka. Dos
+instancias con grupos distintos reciben cada una todos los mensajes; con el
+mismo grupo, una se queda sin partición. Las demás arrancan con
+`KAFKA_CONSUMER_ENABLED=false`: sirven la API y el mapa desde la base, y la
+interfaz refresca el mapa cada 30 s aunque no lleguen eventos por el socket.
+
+Así se trabaja en pruebas: el backend desplegado en Northflank (grupo
+`heatmap-back`) ingiere, y el backend local, que va por el hotspot de los
+nodos, no consume. Un backend conectado por datos móviles no descarga el topic
+al ritmo de los nodos y, al intentarlo, les quita ancho de banda.
 
 ## Modelo de datos
 

@@ -69,7 +69,7 @@ describe('CapturaRepository', () => {
         expect(consulta.execute).toHaveBeenCalledOnce();
     });
 
-    it('sitúa con las últimas lecturas de cada dispositivo, promediando la señal y no la distancia', async () => {
+    it('sitúa con las últimas lecturas de cada dispositivo, con el percentil 75 de la señal y no la distancia', async () => {
         repo.query.mockResolvedValueOnce([{ macHash: 'h', idSensor: 'n1', posX: '0.00', posY: '21.00', rssi: '-63.5000' }]);
 
         await expect(new CapturaRepository(dbFalsa(repo)).senalesDeNodosSituados('z', INICIO, FIN, 60)).resolves.toEqual([
@@ -80,7 +80,10 @@ describe('CapturaRepository', () => {
         // Sólo las lecturas del último minuto de cada dispositivo, no toda la ventana.
         expect(sql).toContain('MAX(c.timestamp_captura) OVER (PARTITION BY c.mac_hash) AS ultima');
         expect(sql).toContain('t.timestamp_captura >= t.ultima - INTERVAL ? SECOND');
-        expect(sql).toContain('AVG(t.rssi)');
+        // Percentil 75 por pareja dispositivo-nodo: resiste a quien pasa por delante.
+        expect(sql).toContain('ROW_NUMBER() OVER (PARTITION BY t.mac_hash, t.id_sensor ORDER BY t.rssi) AS orden');
+        expect(sql).toContain('p.orden = FLOOR(0.75 * (p.tramas - 1)) + 1');
+        expect(sql).not.toContain('AVG(');
         expect(sql).toContain('s.pos_x IS NOT NULL AND s.pos_y IS NOT NULL');
         expect(valores).toEqual(['z', INICIO, FIN, 60]);
     });

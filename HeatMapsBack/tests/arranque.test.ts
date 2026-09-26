@@ -77,11 +77,12 @@ describe('index: arranque y cierre', () => {
     let senales: Record<string, (s: string) => void>;
 
     /** Reinicia los módulos y registra dobles de base de datos, sockets, Kafka y agregador. */
-    const preparar = async (ajustes: { sinCa?: boolean; kafkaFalla?: boolean; bdFalla?: boolean } = {}) => {
+    const preparar = async (ajustes: { sinCa?: boolean; kafkaFalla?: boolean; bdFalla?: boolean; sinIngesta?: boolean } = {}) => {
         vi.resetModules();
         const { container } = await import('tsyringe');
         const { LoggerService } = await import('../src/common/logger/logger.service');
         const { AppConfig } = await import('../src/config/app.config');
+        const { KafkaConfig } = await import('../src/config/kafka.config');
         const { DatabaseConfig } = await import('../src/config/database.config');
         const { SocketEmitterService } = await import('../src/modules/tiempo-real/socket-emitter.service');
         const { KafkaConsumerService } = await import('../src/modules/ingesta/kafka-consumer.service');
@@ -100,6 +101,7 @@ describe('index: arranque y cierre', () => {
         };
         container.registerInstance(LoggerService, dobles.logger as never);
         container.registerInstance(AppConfig, { port: 3999, corsOrigin: '*', trustProxy: 0, auth: {} } as never);
+        container.registerInstance(KafkaConfig, { consumerEnabled: !ajustes.sinIngesta } as never);
         container.registerInstance(DatabaseConfig, dobles.db as never);
         container.registerInstance(SocketEmitterService, dobles.emitter as never);
         container.registerInstance(KafkaConsumerService, dobles.consumer as never);
@@ -137,6 +139,14 @@ describe('index: arranque y cierre', () => {
         expect(dobles.aggregator.start).toHaveBeenCalledOnce();
         expect(dobles.logger.warn).not.toHaveBeenCalled();
         expect(Object.keys(senales)).toEqual(expect.arrayContaining(['SIGINT', 'SIGTERM']));
+    });
+
+    it('con la ingesta desactivada no consume Kafka pero sirve y consolida', async () => {
+        const dobles = await arrancar(await preparar({ sinIngesta: true }));
+        expect(dobles.consumer.start).not.toHaveBeenCalled();
+        expect(dobles.logger.warn).toHaveBeenCalledWith(expect.stringContaining('KAFKA_CONSUMER_ENABLED=false'));
+        expect(servidor.listen).toHaveBeenCalledOnce();
+        expect(dobles.aggregator.start).toHaveBeenCalledOnce();
     });
 
     it('advierte si la base no verifica el certificado', async () => {

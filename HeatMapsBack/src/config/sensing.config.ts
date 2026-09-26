@@ -49,6 +49,11 @@ export class SensingConfig {
         return this.env.get('PRESENCIA_RSSI_MEJOR_MINIMO_DBM');
     }
 
+    /** dB de margen en los umbrales de presencia para las MAC aleatorias. */
+    get presenciaAjusteMacAleatoriaDb(): number {
+        return this.env.get('PRESENCIA_AJUSTE_MAC_ALEATORIA_DB');
+    }
+
     /** Horas que dura una marca automática de infraestructura sin reconfirmarse. */
     get infraestructuraVigenciaHoras(): number {
         return this.env.get('INFRAESTRUCTURA_VIGENCIA_HORAS');

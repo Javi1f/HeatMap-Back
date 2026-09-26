@@ -169,8 +169,86 @@ calibrar:
 
 El exponente sigue importando —cambia el contraste de las razones— pero el
 error que introduce es de decenas de centímetros, no de metros. En un espacio
-abierto con línea de vista está entre 2,0 y 2,2; el valor por defecto de 3,0
-viene de literatura de interiores.
+abierto con línea de vista está entre 2,0 y 2,2.
+
+**Calibración medida (26-09-2026).** Un portátil en cuatro puntos conocidos —
+pegado a cada nodo y en el borde sur— dio −26 a −30 dBm en el nodo pegado y
+entre −48 y −56 dBm en los demás, a 8–21 m. Con esas medidas:
+
+| Exponente | Error medio | Error máximo |
+| --- | --- | --- |
+| literatura (n = 3) | 1,70 m | 2,7 m |
+| **calibrado (n = 2)** | **1,29 m** | **1,8 m** |
+
+La referencia a un metro no cambia la posición —el posicionador no usa la
+escala—, pero sí las distancias guardadas. El portátil dio −28,6 dBm, y un
+teléfono emite unos 11 dB menos (el iPhone del despliegue, −41; el desajuste
+medido sobre los dispositivos presentes, 10,7 dB), así que se deja en
+**−40 dBm**, la del aparato típico.
+
+Como comprobación, un punto que no se usó para ajustar —el centro de la plaza—
+salió a 1,6 m con la pantalla del portátil hacia el nodo más cercano. Con la
+persona entre el portátil y ese nodo, el mismo punto salió a 5,5 m: girar el
+aparato movió 8 dB la señal de otro nodo. El cuerpo y la orientación pesan más
+que cualquier ajuste del modelo, y son la razón de que en uso real el error sea
+de unos metros.
+
+Más allá de unos 8 m la señal apenas cambia con la distancia, así que la
+posición es más fiable cerca de un nodo que en medio de la plaza. Una lectura
+junto a un nodo debe hacerse con el aparato pegado a la antena: con el cuerpo
+del nodo en medio, la misma posición dio −46 dBm en lugar de −30.
+
+### Con personas alrededor
+
+Lo que estropea la posición no es el ruido de trama a trama: con el aparato
+quieto, sus tramas varían de 0,3 a 2,5 dB. Es un **sesgo estable por enlace**,
+de unos ±4 dB medidos, que ponen la orientación de la antena, los rebotes y
+los cuerpos. Una persona entre el aparato y un nodo le quita a ese enlace
+entre 5 y 15 dB; quien pasa por delante, lo mismo pero sólo durante unas
+tramas. Y girar el aparato puede subir un enlace tanto como bajarlo: en el
+centro de la plaza, girar el portátil movió 8 dB la señal de un nodo.
+
+Con tres nodos no se puede saber qué enlace miente —siempre hay un punto que
+explica las tres señales a la vez—, así que el sistema no intenta adivinarlo:
+
+1. **Percentil 75 de cada enlace**, no la media (`senalesDeNodosSituados`). Quien
+   pasa sólo resta, y el percentil alto ignora esa caída mientras afecte a
+   menos de una cuarta parte de las tramas del último minuto.
+2. **Media de las posiciones compatibles**, no la más compatible
+   (`PositioningService`). Cada punto de la plaza pesa según lo bien que
+   explica las señales con un error de 4 dB por enlace; el punto de coste
+   mínimo, el que se usaba antes, es el más probable de esa distribución. Cuando
+   un enlace llega tapado, ese máximo salta al punto que justifica el error,
+   a veces a muchos metros; la media apenas se mueve. Cada estimación dice
+   además cuánto duda (`incertidumbreM`).
+
+Evaluado de dos formas. Primero, sobre las tramas reales de un portátil en siete
+tramos de posición conocida (ventanas de un minuto), con personas simuladas
+encima:
+
+| Escenario | Error medio antes → ahora | Peor 10 % antes → ahora |
+| --- | --- | --- |
+| sin nadie | 2,17 → 2,18 m | 5,5 → 5,1 m |
+| personas quietas tapando enlaces | 3,06 → 2,66 m | 7,1 → 5,6 m |
+| gente de paso | 2,64 → 2,19 m | 7,1 → 4,9 m |
+| todo junto, más orientación | 3,51 → 2,99 m | 8,0 → 6,1 m |
+
+Y, como esos tramos están casi todos junto a un nodo, sobre toda la plaza: una
+rejilla de posiciones con el error medido en campo (±4 dB por enlace y un
+desfase común de ±4 dB por aparato):
+
+| Escenario | Error medio antes → ahora | Peor 10 % antes → ahora |
+| --- | --- | --- |
+| sin nadie | 4,38 → 3,82 m | 8,3 → 6,5 m |
+| con personas | 5,62 → 4,82 m | 10,7 → 8,8 m |
+
+El precio es un sesgo hacia dentro en lo más alejado de los nodos: en la
+esquina sin nodo, con medidas perfectas, la media queda metros hacia el
+centro. En la plaza real las medidas nunca son perfectas y, contando toda la
+plaza, compensa. **Con tres nodos el error típico es de unos 4 m**, y más en
+los bordes; es el límite de la señal, no del método. Más nodos sí lo bajan
+(misma simulación, con personas): cuatro en las esquinas, 4,1 m; los tres
+actuales más las dos esquinas superiores, 3,7 m.
 
 ### Una mancha por dispositivo
 
@@ -183,8 +261,7 @@ metros; el servidor no reparte nada.
 | Lo oyen | Dónde se cuenta |
 | --- | --- |
 | un nodo | junto a ese nodo (sólo pasa si hay un único nodo activo: con dos o más, la presencia exige que lo oigan dos) |
-| dos nodos | sobre el segmento entre ambos, según la razón entre las dos distancias |
-| tres o más | donde minimiza la dispersión de las razones (ver arriba) |
+| dos o más | en la media de las posiciones compatibles con sus señales (ver arriba); con dos, lo compatible es un arco y la media queda dentro de él |
 
 Una posición en el margen exterior que tolera el posicionador se pega al borde
 para que siga contando. Si el posicionador no halla solución, el dispositivo
@@ -213,7 +290,7 @@ sino **dispositivos presentes**, con un único criterio (`presencia.ts`):
      primeros dígitos y llegan con menos de 6 dB de diferencia. Son las redes
      de un mismo aparato.
    - *Junto a un nodo*: señal de −35 dBm o más, a menos de un metro de la
-     antena, **durante al menos 30 minutos seguidos**
+     antena, **durante al menos una hora seguida**
      (`INFRAESTRUCTURA_PERMANENCIA_MINUTOS`). Es equipamiento del despliegue:
      la Wi-Fi de la Raspberry o el hotspot, que están ahí horas.
    - *Manual*: excluido con `npm run dispositivo:excluir`.
@@ -259,6 +336,24 @@ probó antes fue un error: de los que oía un solo nodo, ninguno estaba dentro.
 Con tres dispositivos la muestra es pequeña; conviene repetir la prueba con más,
 y en especial con algo de poca potencia —un reloj, un teléfono en reposo— en el
 centro, que es lo que primero perdería la condición 3.
+
+**Los teléfonos tienen 3 dB de margen en las condiciones 3 y 4**
+(`PRESENCIA_AJUSTE_MAC_ALEATORIA_DB`). Es lo que la advertencia anterior
+temía: un teléfono emite unos 12 dB menos que un portátil, y quien lo lleva tapa
+con el cuerpo algún enlace. Con las lecturas reales de un portátil en
+posiciones conocidas, llevadas al nivel de un teléfono:
+
+| Umbrales para MAC aleatoria | Teléfono presente | Con el cuerpo tapando un nodo | De fuera que se cuelan (2 h) |
+| --- | --- | --- | --- |
+| −60 / −75, como el resto | 65 % | 49 % | 1 persistente, 9 esporádicos |
+| **−63 / −78** | **91 %** | **69 %** | **2 persistentes, 12 esporádicos** |
+| −66 / −81 | 100 % | 89 % | 4 persistentes, 25 esporádicos |
+
+Se reconoce a los teléfonos por la MAC aleatoria, que es la que usan por
+defecto; los equipos fijos de las oficinas de alrededor suelen llevar la de
+fábrica y emitir más fuerte, así que a ellos no se les rebaja nada. No se baja
+más porque los teléfonos de esas oficinas también tienen MAC aleatoria: con
+6 dB ya entraban tres persistentes de fuera.
 
 Sobre los 517 dispositivos captados en una ventana de 5 minutos, con 181
 identificados como infraestructura, el umbral decide cuántos quedan:

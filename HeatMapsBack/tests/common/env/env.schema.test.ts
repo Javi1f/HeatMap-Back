@@ -50,7 +50,7 @@ describe('Conversión de variables numéricas y booleanas', () => {
 
     it('los decimales llegan como texto y se convierten, con valor por defecto si faltan', () => {
         expect(exponente.parse('2.7')).toBe(2.7);
-        expect(exponente.parse(SIN_DEFINIR)).toBe(3);
+        expect(exponente.parse(SIN_DEFINIR)).toBe(2);
         expect(exponente.parse(2.5)).toBe(2.5);
         expect(() => exponente.parse('')).toThrow();
         expect(() => exponente.parse('mucho')).toThrow();

@@ -50,9 +50,9 @@ describe('MacAnonymizerService', () => {
 });
 
 /**
- * Los casos parten de los valores por defecto del entorno de pruebas
- * (RSSI₀ = −40 dBm, n = 3,0), con los que el modelo se reduce a
- * `d = 10 ^ ((−40 − RSSI) / 30)`.
+ * Los casos parten de los valores por defecto, calibrados en la plazoleta
+ * (RSSI₀ = −40 dBm, n = 2,0), con los que el modelo se reduce a
+ * `d = 10 ^ ((−40 − RSSI) / 20)`.
  */
 describe('DistanceEstimatorService', () => {
     const estimator = container.resolve(DistanceEstimatorService);
@@ -61,8 +61,8 @@ describe('DistanceEstimatorService', () => {
         expect(estimator.estimate(-40)).toBeCloseTo(1, 2);
     });
 
-    it('devuelve 10 metros a 30 dB por debajo de la referencia', () => {
-        expect(estimator.estimate(-70)).toBeCloseTo(10, 1);
+    it('devuelve 10 metros a 20 dB por debajo de la referencia', () => {
+        expect(estimator.estimate(-60)).toBeCloseTo(10, 1);
     });
 
     /**
@@ -106,13 +106,13 @@ describe('DistanceEstimatorService', () => {
         });
 
         /*
-         * Con n = 3, duplicar la distancia son 9 dB: si el posicionador mide que
+         * Con n = 2, duplicar la distancia son 6 dB: si el posicionador mide que
          * las distancias salen al doble de lo que exige la geometría, hay que
-         * bajar 9 dB el nivel de referencia.
+         * bajar 6 dB el nivel de referencia.
          */
         it('traduce el factor de escala a los dB que sobran en la referencia', () => {
-            expect(estimator.desajusteDb(2)).toBeCloseTo(9, 1);
-            expect(estimator.desajusteDb(0.5)).toBeCloseTo(-9, 1);
+            expect(estimator.desajusteDb(2)).toBeCloseTo(6, 1);
+            expect(estimator.desajusteDb(0.5)).toBeCloseTo(-6, 1);
         });
 
         it('descarta factores que no son utilizables', () => {
