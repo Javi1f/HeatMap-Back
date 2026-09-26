@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MetricsController } from '../../src/modules/metrics/metrics.controller';
-import { PublicoController } from '../../src/modules/publico/publico.controller';
-import { ReportesController } from '../../src/modules/reportes/reportes.controller';
-import { SensorController } from '../../src/modules/sensor/sensor.controller';
+import { MetricsController } from '../../src/modules/historicos/metricas/metrics.controller';
+import { PublicoController } from '../../src/modules/historicos/publico/publico.controller';
+import { ReportesController } from '../../src/modules/historicos/reportes/reportes.controller';
+import { SensorController } from '../../src/modules/ingesta/sensor.controller';
 import { UnauthorizedError, ValidationError } from '../../src/common/errors';
 import { MESSAGES } from '../../src/constants/messages';
 import { reqFalsa, resFalsa } from '../helpers/dobles';
@@ -52,7 +52,8 @@ describe('MetricsController', () => {
     it('resuelve una alerta a nombre del admin autenticado', async () => {
         const res = resFalsa();
         await ctrl.resolveAlert(reqFalsa({ admin: ADMIN, params: { id: 'a1' } }), res);
-        expect(servicio.resolveAlert).toHaveBeenCalledWith('a1', 'raiz');
+        // Queda a nombre del administrador por su id, que es la clave foránea de `alerta.resuelta_por`.
+        expect(servicio.resolveAlert).toHaveBeenCalledWith('a1', ADMIN.id);
         expect(res.cuerpo).toEqual({ success: true, message: 'Alerta resuelta' });
         await expect(ctrl.resolveAlert(reqFalsa(), resFalsa())).rejects.toBeInstanceOf(UnauthorizedError);
     });

@@ -1,86 +1,56 @@
 /**
- * Tipos de dominio para sensores WiFi.
+ * Tipos de dominio de la ingesta de lecturas Wi-Fi.
  *
- * Representan los formatos de mensaje del productor (sensor físico)
- * y la versión normalizada que circula dentro del backend.
+ * Siguen las etapas del diagrama de secuencia: lo que llega del nodo no tiene
+ * tipo hasta que la validación (`ingesta/validacion-lectura.ts`) lo convierte
+ * en una {@link LecturaSensor}; el filtrado de MAC la depura; la anonimización
+ * sustituye la MAC por su hash al guardar; y a tiempo real solo sale un
+ * {@link ResumenSensor}.
  */
 
 /**
- * Dispositivo detectado por un sensor en una lectura.
+ * Dispositivo de una lectura, ya validado.
+ *
+ * Solo conserva lo que el sistema usa (RNF-01, minimización): el resto de
+ * campos que envía el productor no pasa de la validación.
  */
-export interface Device {
-    /** Dirección MAC del dispositivo (puede ser randomizada). */
+export interface DispositivoDetectado {
+    /** Dirección MAC en claro. Nunca se almacena: se anonimiza al guardar. */
     mac: string;
-    /** Intensidad de señal recibida en dBm. */
+
+    /** Intensidad de señal recibida, en dBm. */
     rssi: number;
-    /** Canal WiFi en el que se vio. */
-    channel: string | number;
-    /** Tipo de trama detectada (probe, beacon, etc.). */
-    type: string;
-    /** Número de paquetes vistos durante la ventana. */
-    packets: number;
-    /** Timestamp en formato legible del último paquete. */
-    last_seen: string;
-    /** `true` si la MAC parece randomizada (bit local). */
-    randomized: boolean;
+
+    /** Canal Wi-Fi en el que se vio; 0 si no se conoce. */
+    canal: number;
+
+    /** Tipo de trama o estado del dispositivo (`probing`, `associated`...). */
+    tipoTrama: string;
 }
 
-/**
- * Payload tal como lo emite el sensor (productor Kafka), antes de
- * cualquier procesamiento.
- */
-export interface SensorPayload {
-    /** Identificador del nodo que emite la lectura. */
-    sensor_id: string;
+/** Lectura de un nodo tras validar su estructura. */
+export interface LecturaSensor {
+    /** Nodo que emitió la lectura (`sensor.id_sensor`). */
+    sensorId: string;
 
-    /** Dispositivos incluidos en la lectura, segun el propio nodo. */
-    total_devices: number;
-
-    /** Epoch en segundos. */
+    /** Momento de la lectura, en segundos desde epoch. */
     timestamp: number;
 
-    /** Dispositivos detectados en la ventana. */
-    devices: Device[];
-}
-
-/**
- * Versión normalizada del payload usada internamente por el backend
- * y difundida a los clientes WebSocket.
- */
-export interface ProcessedSensorData {
-    /** Identificador del nodo que emitio la lectura. */
-    sensor_id: string;
-
-    /** Dispositivos incluidos en la lectura. */
-    total_devices: number;
-
-    /** Hora local legible (ej. "12:34:56"). */
-    timestamp: string;
-    /** Epoch original en segundos (para deduplicación o trazabilidad). */
-    timestamp_raw: number;
-    /** Bytes recibidos desde Kafka (incluye cifrado, métrica de tráfico). */
-    bytes_received: number;
-
-    /** Dispositivos detectados en la ventana. */
-    devices: Device[];
-    /** ISO timestamp del momento en que el backend recibió el mensaje. */
-    received_at: string;
+    /** Dispositivos válidos de la lectura. */
+    dispositivos: DispositivoDetectado[];
 }
 
 /**
  * Resumen de una lectura, que es lo único que se difunde por WebSocket.
  *
  * El canal de Socket.IO no exige autenticación: cualquiera que abra una
- * conexión recibe lo que se emita. Por eso se difunde el conteo y nunca
- * `devices`, que contiene la dirección de cada dispositivo detectado.
- * Publicarlo permitiría a cualquiera seguir a una persona por el campus, que es
- * justo lo que el sistema se compromete a impedir.
+ * conexión recibe lo que se emita. Por eso se difunde solo el conteo y la hora,
+ * nunca la lista de dispositivos ni el identificador del nodo: es la misma
+ * regla que sigue la API pública (`/api/publico`), que tampoco expone
+ * identificadores de infraestructura.
  */
 export interface ResumenSensor {
-    /** Nodo que emitió la lectura. */
-    sensor_id: string;
-
-    /** Dispositivos detectados en la lectura. */
+    /** Dispositivos que pasaron la validación y el filtrado. */
     total_devices: number;
 
     /** Hora local legible de la lectura. */

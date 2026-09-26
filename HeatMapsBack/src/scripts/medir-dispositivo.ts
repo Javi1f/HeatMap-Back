@@ -17,10 +17,10 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { DatabaseConfig } from '../config/database.config';
 import { SensingConfig } from '../config/sensing.config';
-import { CapturaRepository } from '../modules/sensor/repositories/captura.repository';
-import { InfraestructuraRepository } from '../modules/sensor/repositories/infraestructura.repository';
-import { MacAnonymizerService } from '../modules/sensor/services/mac-anonymizer.service';
-import { evaluarPresencia } from '../modules/sensor/services/presencia';
+import { CapturaRepository } from '../persistencia/repositorios/captura.repository';
+import { InfraestructuraRepository } from '../persistencia/repositorios/infraestructura.repository';
+import { MacAnonymizerService } from '../modules/anonimizacion/mac-anonymizer.service';
+import { evaluarPresencia } from '../modules/procesamiento/presencia';
 
 /** Ventana de cada medición: corta, para seguir a quien camina. */
 const VENTANA_MS = 30_000;
@@ -36,15 +36,36 @@ const escribir = (linea: string): void => {
 /** Hora local en `HH:MM:SS`. */
 const hora = (): string => new Date().toTimeString().slice(0, 8);
 
-/**
- * Explica por qué el sistema cuenta o descarta el dispositivo.
- *
- * @param sordos - Nodos que emitieron pero no lo oyeron.
- */
-export const veredicto = (presente: boolean, excluido: boolean, sordos: readonly string[], umbral: number): string => {
+/** Datos con los que se explica el veredicto de un dispositivo. */
+export interface DatosVeredicto {
+    /** `true` si el criterio de presencia lo cuenta. */
+    presente: boolean;
+
+    /** `true` si está marcado como infraestructura vigente. */
+    excluido: boolean;
+
+    /** Nodos que lo oyeron en la ventana. */
+    oyentes: number;
+
+    /** Nodos que el criterio exige que lo oigan. */
+    exigidos: number;
+
+    /** Señal en el nodo que mejor lo oye, en dBm. */
+    mejor: number;
+
+    /** Señal mínima exigida en el nodo que mejor lo oye, en dBm. */
+    umbralMejor: number;
+
+    /** Señal mínima exigida en el nodo que peor lo oye, en dBm. */
+    umbral: number;
+}
+
+/** Explica por qué el sistema cuenta o descarta el dispositivo. */
+export const veredicto = ({ presente, excluido, oyentes, exigidos, mejor, umbralMejor, umbral }: DatosVeredicto): string => {
     if (presente) return 'PRESENTE';
     if (excluido) return 'EXCLUIDO como infraestructura';
-    if (sordos.length > 0) return `FUERA: no lo oye ${sordos.join(', ')}`;
+    if (oyentes < exigidos) return `FUERA: sólo lo oyen ${oyentes} nodo(s) de los ${exigidos} exigidos`;
+    if (mejor < umbralMejor) return `FUERA: ni el nodo que mejor lo oye llega a ${umbralMejor} dBm; está lejos de todos`;
     return `FUERA: el nodo más débil no llega a ${umbral} dBm`;
 };
 
@@ -62,7 +83,10 @@ export const medir = async (macHash: string): Promise<void> => {
     const desde = new Date(hasta.getTime() - VENTANA_MS);
     const [senales, excluidos] = await Promise.all([
         capturas.senalesPorNodo(desde, hasta),
-        infraestructura.vigentes(new Date(hasta.getTime() - cfg.infraestructuraVigenciaHoras * 3_600_000)),
+        infraestructura.vigentes(
+            new Date(hasta.getTime() - cfg.infraestructuraVigenciaHoras * 3_600_000),
+            cfg.infraestructuraPermanenciaMinutos * 60,
+        ),
     ]);
 
     const propias = senales.filter((senal) => senal.macHash === macHash);
@@ -77,11 +101,24 @@ export const medir = async (macHash: string): Promise<void> => {
 
     const columnas = nodos.map((nodo) => columna(nodo, porNodo.get(nodo))).join('   ');
 
-    const presente = evaluarPresencia(deLaZona, { rssiMinimoDbm: cfg.presenciaRssiMinimoDbm, excluidos })
-        .presentes.has(macHash);
-    const masDebil = Math.round(Math.min(...propias.map((senal) => senal.rssi)));
-    const sordos = nodos.filter((nodo) => !porNodo.has(nodo));
-    const texto = veredicto(presente, excluidos.has(macHash), sordos, cfg.presenciaRssiMinimoDbm);
+    const criterios = {
+        rssiMinimoDbm: cfg.presenciaRssiMinimoDbm,
+        nodosMinimos: cfg.presenciaNodosMinimos,
+        rssiMejorMinimoDbm: cfg.presenciaRssiMejorMinimoDbm,
+        excluidos,
+    };
+    const presente = evaluarPresencia(deLaZona, criterios).presentes.has(macHash);
+    const senalesPropias = propias.map((senal) => senal.rssi);
+    const masDebil = Math.round(Math.min(...senalesPropias));
+    const texto = veredicto({
+        presente,
+        excluido: excluidos.has(macHash),
+        oyentes: porNodo.size,
+        exigidos: Math.min(cfg.presenciaNodosMinimos, nodos.length),
+        mejor: Math.max(...senalesPropias),
+        umbralMejor: cfg.presenciaRssiMejorMinimoDbm,
+        umbral: cfg.presenciaRssiMinimoDbm,
+    });
 
     escribir(`${hora()}  ${columnas}   | más débil ${masDebil} dBm | ${texto}`);
 };

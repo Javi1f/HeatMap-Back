@@ -43,9 +43,9 @@ import { container } from 'tsyringe';
 import { EnvService } from '../../src/common/env/env.service';
 import { DatabaseConfig } from '../../src/config/database.config';
 import { SensingConfig } from '../../src/config/sensing.config';
-import { InfraestructuraRepository } from '../../src/modules/sensor/repositories/infraestructura.repository';
-import { CapturaRepository } from '../../src/modules/sensor/repositories/captura.repository';
-import { MacAnonymizerService } from '../../src/modules/sensor/services/mac-anonymizer.service';
+import { InfraestructuraRepository } from '../../src/persistencia/repositorios/infraestructura.repository';
+import { CapturaRepository } from '../../src/persistencia/repositorios/captura.repository';
+import { MacAnonymizerService } from '../../src/modules/anonimizacion/mac-anonymizer.service';
 import { esMac, principal as excluirDispositivo } from '../../src/scripts/excluir-dispositivo';
 import { medir, principal as medirDispositivo, veredicto } from '../../src/scripts/medir-dispositivo';
 import { opcionesConexion, principal as respaldar } from '../../src/scripts/respaldo-bd';
@@ -140,14 +140,19 @@ describe('dispositivo:medir', () => {
     const preparar = (senales: (h: string) => unknown[], excluidos: string[] = []) => {
         container.registerInstance(CapturaRepository, { senalesPorNodo: vi.fn(() => Promise.resolve(senales(hash()))) } as never);
         container.registerInstance(InfraestructuraRepository, { vigentes: vi.fn(() => Promise.resolve(new Set(excluidos))) } as never);
-        container.registerInstance(SensingConfig, { infraestructuraVigenciaHoras: 24, presenciaRssiMinimoDbm: -75, macHashKey: Buffer.alloc(32, 0xaa) } as never);
+        container.registerInstance(SensingConfig, {
+            infraestructuraVigenciaHoras: 24, infraestructuraPermanenciaMinutos: 30, presenciaRssiMinimoDbm: -75,
+            presenciaNodosMinimos: 2, presenciaRssiMejorMinimoDbm: -62, macHashKey: Buffer.alloc(32, 0xaa),
+        } as never);
     };
 
     it('explica cada veredicto', () => {
-        expect(veredicto(true, false, [], -75)).toBe('PRESENTE');
-        expect(veredicto(false, true, [], -75)).toBe('EXCLUIDO como infraestructura');
-        expect(veredicto(false, false, ['n3'], -75)).toBe('FUERA: no lo oye n3');
-        expect(veredicto(false, false, [], -75)).toBe('FUERA: el nodo más débil no llega a -75 dBm');
+        const base = { presente: false, excluido: false, oyentes: 2, exigidos: 2, mejor: -55, umbralMejor: -60, umbral: -75 };
+        expect(veredicto({ ...base, presente: true })).toBe('PRESENTE');
+        expect(veredicto({ ...base, excluido: true })).toBe('EXCLUIDO como infraestructura');
+        expect(veredicto({ ...base, oyentes: 1 })).toBe('FUERA: sólo lo oyen 1 nodo(s) de los 2 exigidos');
+        expect(veredicto({ ...base, mejor: -66 })).toBe('FUERA: ni el nodo que mejor lo oye llega a -60 dBm; está lejos de todos');
+        expect(veredicto(base)).toBe('FUERA: el nodo más débil no llega a -75 dBm');
     });
 
     it('avisa si ningún nodo lo ha oído', async () => {
@@ -156,19 +161,32 @@ describe('dispositivo:medir', () => {
         expect(salida.join('')).toContain('ningún nodo lo ha oído en los últimos 30 s');
     });
 
-    it('muestra la señal por nodo y si cuenta como presente', async () => {
+    it('muestra la señal por nodo, con raya en el que no lo oyó', async () => {
         preparar((huella) => [senal(huella, 'n1', -60.4), senal(huella, 'n2', -70), senal('otro', 'n3', -50)]);
         await medir(hash());
         const linea = salida.join('');
         expect(linea).toContain('n1  -60');
         expect(linea).toContain('n3   —');
-        expect(linea).toContain('más débil -70 dBm | FUERA: no lo oye n3');
+        // Dos nodos de los tres bastan para contarlo dentro.
+        expect(linea).toContain('más débil -70 dBm | PRESENTE');
+    });
+
+    it('explica que lo oyen muy pocos nodos', async () => {
+        preparar((huella) => [senal(huella, 'n1', -60), senal('otro', 'n2', -50), senal('otro', 'n3', -50)]);
+        await medir(hash());
+        expect(salida.join('')).toContain('FUERA: sólo lo oyen 1 nodo(s) de los 2 exigidos');
     });
 
     it('reconoce un dispositivo presente', async () => {
         preparar((huella) => [senal(huella, 'n1', -60), senal(huella, 'n2', -65)]);
         await medir(hash());
         expect(salida.join('')).toContain('| PRESENTE');
+    });
+
+    it('explica que lo que llega débil a todos está lejos de todos', async () => {
+        preparar((huella) => [senal(huella, 'n1', -66), senal(huella, 'n2', -67), senal(huella, 'n3', -68)]);
+        await medir(hash());
+        expect(salida.join('')).toContain('FUERA: ni el nodo que mejor lo oye llega a -62 dBm; está lejos de todos');
     });
 
     it('rechaza una MAC inválida', async () => {

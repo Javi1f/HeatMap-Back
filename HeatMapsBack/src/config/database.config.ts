@@ -1,17 +1,17 @@
 import { singleton } from 'tsyringe';
 import { DataSource } from 'typeorm';
-import { Admin } from '../models/Admin.entity';
-import { AllowedEmail } from '../models/AllowedEmail.entity';
-import { PendingRegistration } from '../models/PendingRegistration.entity';
-import { SesionAuth } from '../models/SesionAuth.entity';
-import { Zona } from '../models/Zona.entity';
-import { Sensor } from '../models/Sensor.entity';
-import { Captura } from '../models/Captura.entity';
-import { EventoAuditoria } from '../models/EventoAuditoria.entity';
-import { DispositivoInfraestructura } from '../models/DispositivoInfraestructura.entity';
-import { OcupacionAgregada } from '../models/OcupacionAgregada.entity';
-import { Alerta } from '../models/Alerta.entity';
-import { Reporte } from '../models/Reporte.entity';
+import { Admin } from '../persistencia/entidades/Admin.entity';
+import { AllowedEmail } from '../persistencia/entidades/AllowedEmail.entity';
+import { PendingRegistration } from '../persistencia/entidades/PendingRegistration.entity';
+import { SesionAuth } from '../persistencia/entidades/SesionAuth.entity';
+import { Zona } from '../persistencia/entidades/Zona.entity';
+import { Sensor } from '../persistencia/entidades/Sensor.entity';
+import { Captura } from '../persistencia/entidades/Captura.entity';
+import { EventoAuditoria } from '../persistencia/entidades/EventoAuditoria.entity';
+import { DispositivoInfraestructura } from '../persistencia/entidades/DispositivoInfraestructura.entity';
+import { OcupacionAgregada } from '../persistencia/entidades/OcupacionAgregada.entity';
+import { Alerta } from '../persistencia/entidades/Alerta.entity';
+import { Reporte } from '../persistencia/entidades/Reporte.entity';
 import { EnvService } from '../common/env/env.service';
 
 /**

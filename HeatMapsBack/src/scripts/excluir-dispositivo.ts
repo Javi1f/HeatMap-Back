@@ -15,8 +15,9 @@ import '../loadEnv';
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { DatabaseConfig } from '../config/database.config';
-import { InfraestructuraRepository } from '../modules/sensor/repositories/infraestructura.repository';
-import { MacAnonymizerService } from '../modules/sensor/services/mac-anonymizer.service';
+import { InfraestructuraRepository } from '../persistencia/repositorios/infraestructura.repository';
+import { MacAnonymizerService } from '../modules/anonimizacion/mac-anonymizer.service';
+import { esMacBienFormada, normalizarMac } from '../common/utils/mac';
 
 /** Escribe una línea en la salida estándar. */
 const escribir = (linea: string): void => {
@@ -24,7 +25,7 @@ const escribir = (linea: string): void => {
 };
 
 /** Indica si el texto contiene exactamente los 12 dígitos de una MAC. */
-export const esMac = (texto: string): boolean => texto.toLowerCase().replace(/[^0-9a-f]/g, '').length === 12;
+export const esMac = (texto: string): boolean => esMacBienFormada(normalizarMac(texto));
 
 /**
  * Registra o elimina la exclusión y comunica el resultado.

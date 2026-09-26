@@ -6,9 +6,9 @@ import { createApp } from './app';
 import { AppConfig } from './config/app.config';
 import { DatabaseConfig } from './config/database.config';
 import { LoggerService } from './common/logger/logger.service';
-import { SocketEmitterService } from './modules/sensor/services/socket-emitter.service';
-import { KafkaConsumerService } from './modules/sensor/services/kafka-consumer.service';
-import { OccupancyAggregatorService } from './modules/sensor/services/occupancy-aggregator.service';
+import { SocketEmitterService } from './modules/tiempo-real/socket-emitter.service';
+import { KafkaConsumerService } from './modules/ingesta/kafka-consumer.service';
+import { OccupancyAggregatorService } from './modules/procesamiento/occupancy-aggregator.service';
 import { MESSAGES } from './constants/messages';
 
 /**

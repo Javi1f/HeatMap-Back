@@ -114,6 +114,7 @@ export const consultaFalsa = (resultados: Partial<Record<'getMany' | 'getRawMany
     const encadenables = [
         'select', 'addSelect', 'from', 'leftJoin', 'leftJoinAndSelect', 'where', 'andWhere', 'orWhere',
         'groupBy', 'addGroupBy', 'orderBy', 'addOrderBy', 'limit', 'take', 'skip', 'setParameters',
+        'insert', 'into', 'values', 'updateEntity',
     ];
     for (const metodo of encadenables) consulta[metodo] = vi.fn(() => consulta);
     // Un join contra una subconsulta recibe una función que la construye: se
@@ -128,5 +129,6 @@ export const consultaFalsa = (resultados: Partial<Record<'getMany' | 'getRawMany
     consulta.getRawOne = vi.fn(() => Promise.resolve(resultados.getRawOne));
     consulta.getCount = vi.fn(() => Promise.resolve(resultados.getCount ?? 0));
     consulta.getOne = vi.fn(() => Promise.resolve(resultados.getOne ?? null));
+    consulta.execute = vi.fn(() => Promise.resolve({}));
     return consulta;
 };

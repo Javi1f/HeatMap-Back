@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addAllowedEmailSchema, allowedEmailIdParamSchema } from '../../src/modules/allowed-emails/dto/add-email.dto';
-import { cancelVerificationSchema } from '../../src/modules/auth/dto/cancel-verification.dto';
-import { adminIdParamSchema, auditoriaQuerySchema, cambiarActivoSchema, cambiarRolSchema } from '../../src/modules/users/dto/usuarios.dto';
-import { TIPOS_REPORTE, crearReporteSchema, reporteIdParamSchema } from '../../src/modules/reportes/dto/reporte.dto';
+import { addAllowedEmailSchema, allowedEmailIdParamSchema } from '../../src/modules/identidad/correos-permitidos/dto/add-email.dto';
+import { cancelVerificationSchema } from '../../src/modules/identidad/autenticacion/dto/cancel-verification.dto';
+import { adminIdParamSchema, auditoriaQuerySchema, cambiarActivoSchema, cambiarRolSchema } from '../../src/modules/identidad/usuarios/dto/usuarios.dto';
+import { TIPOS_REPORTE, crearReporteSchema, reporteIdParamSchema } from '../../src/modules/historicos/reportes/dto/reporte.dto';
 
 describe('Esquemas de la lista blanca', () => {
     it('normaliza el correo y rechaza uno inválido', () => {
@@ -10,9 +10,9 @@ describe('Esquemas de la lista blanca', () => {
         expect(addAllowedEmailSchema.safeParse({ email: 'ana' }).success).toBe(false);
     });
 
-    it('convierte el id de la ruta a entero positivo', () => {
-        expect(allowedEmailIdParamSchema.parse({ id: '12' })).toEqual({ id: 12 });
-        for (const id of ['0', '-3', '1.5', 'abc']) expect(allowedEmailIdParamSchema.safeParse({ id }).success).toBe(false);
+    it('exige que el id de la ruta sea un UUID', () => {
+        expect(allowedEmailIdParamSchema.parse({ id: '11111111-1111-4111-8111-111111111111' })).toEqual({ id: '11111111-1111-4111-8111-111111111111' });
+        for (const id of ['12', '-3', 'abc', '']) expect(allowedEmailIdParamSchema.safeParse({ id }).success).toBe(false);
     });
 });
 
@@ -26,8 +26,8 @@ describe('Esquema de cancelación de registro', () => {
 
 describe('Esquemas de gestión de usuarios', () => {
     it('id de administrador', () => {
-        expect(adminIdParamSchema.parse({ id: '3' })).toEqual({ id: 3 });
-        expect(adminIdParamSchema.safeParse({ id: 'x' }).success).toBe(false);
+        expect(adminIdParamSchema.parse({ id: '22222222-2222-4222-8222-222222222222' })).toEqual({ id: '22222222-2222-4222-8222-222222222222' });
+        expect(adminIdParamSchema.safeParse({ id: '3' }).success).toBe(false);
     });
 
     it('solo admite los roles root y admin', () => {
