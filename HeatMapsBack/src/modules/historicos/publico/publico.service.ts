@@ -2,6 +2,7 @@ import { injectable } from 'tsyringe';
 import { HeatmapService, MapaDeCalor } from '../../procesamiento/heatmap.service';
 import { OcupacionRepository } from '../../../persistencia/repositorios/ocupacion.repository';
 import { ZonaRepository } from '../../../persistencia/repositorios/zona.repository';
+import { crearCacheTemporal } from '../../../common/utils/cache-temporal';
 
 /** Espacio tal como se ofrece a cualquier visitante. */
 export interface ZonaPublica {
@@ -101,6 +102,17 @@ export interface MapaPublico {
     hasta: string;
 }
 
+/**
+ * Lista de zonas reciente, compartida entre visitantes.
+ *
+ * El nivel de cada zona sale de la última ventana consolidada, que cambia cada
+ * 5 minutos, y la página la pide en cada carga. Sin caché, cada visitante
+ * lanzaba sus consultas a la base remota (≈1,2 s): con 200 a la vez acaparaban
+ * las conexiones del pool y frenaban también el mapa (prueba CP-21). Diez
+ * segundos no cambian nada visible.
+ */
+const zonasRecientes = crearCacheTemporal<ZonaPublica[]>(10_000, Date.now, 60_000);
+
 /** `true` si la zona declara un ancho y un alto utilizables. */
 const tieneGeometria = (coordenadas: Record<string, unknown> | null): boolean => {
     if (!coordenadas) return false;
@@ -168,7 +180,12 @@ export class PublicoService {
      * Solo los que tienen geometría definida: sin ancho y alto no hay plano que
      * dibujar, y ofrecerlos daría un mapa vacío sin explicación.
      */
-    async listarZonas(): Promise<ZonaPublica[]> {
+    listarZonas(): Promise<ZonaPublica[]> {
+        return zonasRecientes.obtener('zonas', () => this.calcularZonas());
+    }
+
+    /** Zonas con geometría y el nivel de su última ventana consolidada, leídos de la base. */
+    private async calcularZonas(): Promise<ZonaPublica[]> {
         const [activas, ultimas] = await Promise.all([
             this.zonas.findActive(),
             this.ocupacion.findLatestPerZone(),

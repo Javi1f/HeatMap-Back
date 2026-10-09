@@ -23,6 +23,14 @@ const LADO_CELDA_M = 0.5;
 const VENTANA_POR_DEFECTO_MIN = 5;
 
 /**
+ * Tiempo tras caducar durante el que se sigue sirviendo un mapa mientras se
+ * calcula el siguiente. Cubre de sobra un recálculo normal (~3 s); si la base
+ * deja de responder, pasado este margen se espera al cálculo en lugar de
+ * mostrar un mapa congelado como si fuera actual.
+ */
+const MAPA_CADUCADO_SERVIBLE_MS = 15_000;
+
+/**
  * Mapas recientes, compartidos entre peticiones.
  *
  * La interfaz recarga el mapa hasta cada 2 s al llegar lecturas para cumplir
@@ -30,8 +38,13 @@ const VENTANA_POR_DEFECTO_MIN = 5;
  * consultas pesadas por segundo con el mismo resultado. Un segundo de caché
  * deja como mucho una consulta por segundo por zona, haya los visitantes que
  * haya, y suma a lo sumo 1 s al tiempo de reflejo.
+ *
+ * Mientras se recalcula se sirve el mapa anterior (ver
+ * {@link MAPA_CADUCADO_SERVIBLE_MS}): calcularlo cuesta unos 3 s contra la base
+ * remota, y sin esto todas las peticiones de ese rato esperaban. En la prueba
+ * de carga (CP-21) era el percentil 95.
  */
-const mapasRecientes = crearCacheTemporal<MapaDeCalor>(1_000);
+const mapasRecientes = crearCacheTemporal<MapaDeCalor>(1_000, Date.now, MAPA_CADUCADO_SERVIBLE_MS);
 
 /** Ventana máxima admitida, en minutos. */
 const VENTANA_MAXIMA_MIN = 120;
