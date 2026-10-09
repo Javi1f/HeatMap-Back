@@ -38,6 +38,91 @@ describe('crearCacheTemporal', () => {
         expect(calcular).toHaveBeenCalledTimes(1);
     });
 
+    /*
+     * Defecto hallado en la prueba de carga (CP-21): el mapa tarda más en
+     * calcularse que la vida de la caché, y como esa vida se contaba desde el
+     * inicio, el resultado llegaba ya caducado y cada petición recalculaba.
+     */
+    it('un cálculo más lento que la vida de la caché sigue sirviendo a quien llega mientras dura y después', async () => {
+        let reloj = 0;
+        const cache = crearCacheTemporal<number>(1000, () => reloj);
+        /** Termina el cálculo en curso; la asigna la promesa al crearse. */
+        let terminar!: (valor: number) => void;
+        const calcular = vi.fn(() => new Promise<number>((resolver) => {
+            terminar = resolver;
+        }));
+
+        const primera = cache.obtener('mapa', calcular);
+        reloj = 2800;
+        const durante = cache.obtener('mapa', calcular);
+        terminar(5);
+        await expect(Promise.all([primera, durante])).resolves.toEqual([5, 5]);
+
+        reloj = 3500;
+        await cache.obtener('mapa', calcular);
+        expect(calcular).toHaveBeenCalledTimes(1);
+
+        reloj = 3800;
+        await cache.obtener('mapa', () => Promise.resolve(6));
+        expect(await cache.obtener('mapa', calcular)).toBe(6);
+    });
+
+    describe('sirviendo lo caducado mientras recalcula', () => {
+        /** Promesa que se resuelve o rechaza desde fuera. */
+        const diferida = <T>() => {
+            let resolver!: (valor: T) => void;
+            let rechazar!: (error: Error) => void;
+            const promesa = new Promise<T>((ok, ko) => {
+                resolver = ok;
+                rechazar = ko;
+            });
+            return { promesa, resolver, rechazar };
+        };
+
+        it('dentro del margen devuelve el valor anterior al instante y recalcula una sola vez', async () => {
+            let reloj = 0;
+            const cache = crearCacheTemporal<number>(1000, () => reloj, 15_000);
+            await cache.obtener('mapa', () => Promise.resolve(1));
+
+            reloj = 2000;
+            const siguiente = diferida<number>();
+            const calcular = vi.fn(() => siguiente.promesa);
+            await expect(cache.obtener('mapa', calcular)).resolves.toBe(1);
+            await expect(cache.obtener('mapa', calcular)).resolves.toBe(1);
+            expect(calcular).toHaveBeenCalledOnce();
+
+            siguiente.resolver(2);
+            await siguiente.promesa;
+            await expect(cache.obtener('mapa', calcular)).resolves.toBe(2);
+        });
+
+        it('pasado el margen ya no sirve lo viejo: espera al cálculo', async () => {
+            let reloj = 0;
+            const cache = crearCacheTemporal<number>(1000, () => reloj, 15_000);
+            await cache.obtener('mapa', () => Promise.resolve(1));
+
+            reloj = 1000 + 15_001;
+            await expect(cache.obtener('mapa', () => Promise.resolve(3))).resolves.toBe(3);
+        });
+
+        it('si el recálculo falla, conserva el valor anterior y lo reintenta en la siguiente petición', async () => {
+            let reloj = 0;
+            const cache = crearCacheTemporal<number>(1000, () => reloj, 15_000);
+            await cache.obtener('mapa', () => Promise.resolve(1));
+
+            reloj = 2000;
+            const fallido = diferida<number>();
+            await expect(cache.obtener('mapa', () => fallido.promesa)).resolves.toBe(1);
+            fallido.rechazar(new Error('base caída'));
+            await expect(fallido.promesa).rejects.toThrow('base caída');
+            await Promise.resolve();
+
+            const reintento = vi.fn(() => Promise.resolve(4));
+            await expect(cache.obtener('mapa', reintento)).resolves.toBe(1);
+            expect(reintento).toHaveBeenCalledOnce();
+        });
+    });
+
     it('no guarda un fallo: la siguiente petición reintenta', async () => {
         const cache = crearCacheTemporal<number>(3000);
         const fallo = vi.fn(() => Promise.reject(new Error('caída')));
