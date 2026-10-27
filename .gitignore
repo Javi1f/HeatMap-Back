@@ -1,0 +1,70 @@
+# --- Secretos y entorno (nunca subir) ---
+.env
+.env.*
+*.env
+!.env.example
+/env (1)/
+/env/
+
+# --- IA / asistentes locales (claude, opencode, etc.) ---
+.claude/
+.opencode/
+opencode/
+.codex/
+.cursor/
+
+# --- Carpeta de nube local del usuario ---
+cloud/
+Cloud/
+CLOUD/
+
+# --- IDEs y editores ---
+.idea/
+.vscode/
+*.launch
+*.sublime-workspace
+*.sublime-project
+.history/
+
+# --- Dependencias y compilaciÃ³n ---
+node_modules/
+dist/
+build/
+out-tsc/
+tmp/
+.angular/
+.nx/
+*.tsbuildinfo
+
+# --- Logs y cobertura ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+.nyc_output/
+
+# --- Certificados (sensibles) ---
+certs/
+*.pem
+*.cert
+*.key
+*.crt
+
+# --- Sistema operativo / OneDrive ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+~$*
+
+# --- Respaldos y basura ---
+respaldos/
+*.bak
+*.orig
+qodana.yaml
+
+
+# Datos locales de cotizaciones (JSON del modulo comercial)
+datos-demo/
