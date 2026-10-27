@@ -5,6 +5,7 @@ import { AppConfig } from './config/app.config';
 import { decryptRequest, encryptResponse } from './crypto/crypto.middleware';
 import { errorHandler, notFoundHandler } from './common/middlewares/error-handler.middleware';
 import { requestIdMiddleware } from './common/middlewares/request-id.middleware';
+import { securityHeadersMiddleware } from './common/middlewares/security-headers.middleware';
 import { buildAuthRouter } from './modules/identidad/autenticacion/auth.routes';
 import { buildAllowedEmailsRouter } from './modules/identidad/correos-permitidos/allowed-emails.routes';
 import { buildSensorRouter } from './modules/ingesta/sensor.routes';
@@ -22,7 +23,9 @@ import {
  *
  * Orden del pipeline (importa que se respete):
  *  1. **`requestIdMiddleware`** — asigna un id único por petición.
- *  2. **`cors`** — CORS con origen configurable.
+ *  1b. **`securityHeadersMiddleware`** — cabeceras de endurecimiento en toda
+ *      respuesta (nosniff, anti-clickjacking, CSP, referrer/permissions).
+ *  2. **`cors`** — CORS con origen configurado (nunca wildcard).
  *  3. **`express.json`** — parser de body JSON.
  *  4. **Health check** `/ping` — no pasa por cifrado ni auth.
  *  5. **Crypto middlewares** sobre `/api` y `/kafka` (descifra → cifra).
@@ -46,6 +49,7 @@ export const createApp = (): Application => {
     app.set('trust proxy', cfg.trustProxy);
 
     app.use(requestIdMiddleware);
+    app.use(securityHeadersMiddleware);
     app.use(cors({ origin: cfg.corsOrigin }));
     app.use(express.json({ limit: '1mb' }));
 

@@ -379,8 +379,15 @@ export const envSchema = z.object({
     /** Fracción del aforo a partir de la cual se considera media. */
     OCCUPANCY_MEDIUM_RATIO: floatFromString(0.5),
 
-    /** Origen admitido en las cabeceras CORS. */
-    CORS_ORIGIN: z.string().default('*'),
+    /**
+     * Origen admitido en las cabeceras CORS.
+     *
+     * Endurecido tras el escaneo ZAP del 27-10-2026 (finding de misconfiguración
+     * cross-domain): se restringe a los orígenes que sirve el frontend. Para un
+     * despliegue en producción, se pondrá aquí el dominio real de la app y se
+     * retira el comodín `*`, que dejaba cualquier sitio web consumir la API.
+     */
+    CORS_ORIGIN: z.string().default('http://localhost:4200'),
 
     /*
      * Saltos de proxy en los que confiar para deducir la IP del cliente.
