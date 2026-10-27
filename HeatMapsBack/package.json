@@ -22,7 +22,8 @@
     "bd:respaldo": "ts-node src/scripts/respaldo-bd.ts",
     "bd:restaurar": "ts-node src/scripts/restaurar-bd.ts",
     "bd:deriva": "ts-node src/scripts/deriva-esquema.ts",
-    "bd:migrar": "ts-node src/scripts/migrar-esquema.ts"
+    "bd:migrar": "ts-node src/scripts/migrar-esquema.ts",
+    "cotizacion:demo": "ts-node src/scripts/sembrar-cotizacion-demo.ts"
   },
   "keywords": [],
   "author": "",

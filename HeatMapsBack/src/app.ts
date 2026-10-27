@@ -12,6 +12,10 @@ import { buildMetricsRouter } from './modules/historicos/metricas/metrics.routes
 import { buildUsersRouter } from './modules/identidad/usuarios/users.routes';
 import { buildReportesRouter } from './modules/historicos/reportes/reportes.routes';
 import { buildPublicoRouter } from './modules/historicos/publico/publico.routes';
+import {
+    buildCotizacionRouter,
+    buildCotizacionesRouter,
+} from './modules/cotizacion/cotizacion.routes';
 
 /**
  * Construye y configura la aplicación Express.
@@ -53,6 +57,8 @@ export const createApp = (): Application => {
     app.use('/kafka', decryptRequest, encryptResponse);
 
     app.use('/api/publico', buildPublicoRouter());
+    app.use('/api/cotizacion', buildCotizacionRouter());
+    app.use('/api/cotizaciones', buildCotizacionesRouter());
     app.use('/api/auth', buildAuthRouter());
     app.use('/api/allowed-emails', buildAllowedEmailsRouter());
     app.use('/api/users', buildUsersRouter());

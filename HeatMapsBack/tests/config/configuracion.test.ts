@@ -151,7 +151,7 @@ describe('DatabaseConfig', () => {
         const db = new DatabaseConfig(envCon({ DB_SSL_CA: undefined }));
         expect(db.verificaCertificado).toBe(false);
         expect(db.dataSource.options).toMatchObject({ type: 'mysql', charset: 'utf8mb4', timezone: 'Z', ssl: { rejectUnauthorized: false } });
-        expect((db.dataSource.options as { entities: unknown[] }).entities).toHaveLength(12);
+        expect((db.dataSource.options as { entities: unknown[] }).entities).toHaveLength(13);
     });
 
     it('con CA verifica el certificado del servidor', () => {

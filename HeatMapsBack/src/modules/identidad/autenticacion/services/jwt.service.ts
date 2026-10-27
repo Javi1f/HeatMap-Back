@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { injectable } from 'tsyringe';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { AppConfig } from '../../../../config/app.config';
@@ -38,12 +39,17 @@ export class JwtService {
 
     /**
      * Firma un token con la información mínima del administrador.
+     *
+     * El `iat` de `jsonwebtoken` solo llega al segundo: dos firmas en el
+     * mismo segundo con el mismo payload darían un token idéntico y chocarían
+     * con la llave única de `sesion_auth.token_hash`. El `jti` aporta la
+     * entropía que evita esa colisión entre logins consecutivos.
      */
     sign(payload: JwtPayload): string {
         const options: SignOptions = {
             expiresIn: this.cfg.auth.jwtExpiresIn as SignOptions['expiresIn'],
         };
-        return jwt.sign(payload, this.cfg.auth.jwtSecret, options);
+        return jwt.sign({ ...payload, jti: crypto.randomUUID() }, this.cfg.auth.jwtSecret, options);
     }
 
     /**

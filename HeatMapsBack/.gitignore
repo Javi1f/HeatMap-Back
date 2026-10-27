@@ -44,3 +44,6 @@ coverage/
 # OS
 Thumbs.db
 respaldos/
+
+# Datos del modo demo de cotizaciones (presentación)
+datos-demo/

@@ -25,4 +25,7 @@ export interface JwtPayload {
 
     /** Rol al emitir el token. Informativo: los permisos se comprueban contra la base de datos. */
     rol?: RolAdmin;
+
+    /** Identificador único del token, generado al firmar para que dos emisiones nunca coincidan. */
+    jti?: string;
 }

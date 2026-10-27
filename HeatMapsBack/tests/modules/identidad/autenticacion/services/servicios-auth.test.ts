@@ -18,6 +18,13 @@ describe('JwtService', () => {
         expect(servicio.verify(token)).toMatchObject(payload);
     });
 
+    it('dos firmas seguidas producen tokens distintos aunque caigan en el mismo segundo', () => {
+        const [primero, segundo] = [servicio.sign(payload), servicio.sign(payload)];
+        expect(primero).not.toBe(segundo);
+        expect(servicio.verify(primero).jti).toBeDefined();
+        expect(servicio.verify(segundo).jti).not.toBe(servicio.verify(primero).jti);
+    });
+
     it('caduca en una hora como máximo', () => {
         const expira = servicio.expiryOf(servicio.sign(payload));
         expect(expira).not.toBeNull();

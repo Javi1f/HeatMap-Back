@@ -101,3 +101,19 @@ export const publicRateLimiter: RateLimitRequestHandler = rateLimit({
     windowMs: 5 * 60 * 1000,
     limit: 300,
 });
+
+/**
+ * Limiter para la solicitud de cotización: el único endpoint público que
+ * escribe en la base. Enviar una solicitud es la acción de una persona que
+ * acabó de rellenar un formulario, no de un script, así que el presupuesto
+ * cubre con holgura los reintentos de un formulario de verdad y frena una
+ * granja de envíos.
+ *
+ *  - **Ventana**: 15 minutos.
+ *  - **Máximo**: 10 peticiones por IP en la ventana.
+ */
+export const cotizacionRateLimiter: RateLimitRequestHandler = rateLimit({
+    ...commonOptions,
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+});

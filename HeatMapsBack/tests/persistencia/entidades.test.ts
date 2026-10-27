@@ -26,10 +26,10 @@ const metadatos = (tabla: string) => {
 };
 
 describe('Entidades', () => {
-    it('registra las doce tablas del esquema', () => {
+    it('registra las trece tablas del esquema', () => {
         expect(fuente.entityMetadatas.map((entidad) => entidad.tableName).sort()).toEqual([
             'admin', 'alerta', 'correo_permitido', 'captura', 'dispositivo_infraestructura', 'evento_auditoria',
-            'ocupacion_agregada', 'registro_pendiente', 'reporte', 'sensor', 'sesion_auth', 'zona',
+            'ocupacion_agregada', 'registro_pendiente', 'reporte', 'sensor', 'sesion_auth', 'solicitud_cotizacion', 'zona',
         ].sort());
     });
 

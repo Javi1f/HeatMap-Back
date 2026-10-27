@@ -7,6 +7,11 @@ import { AppConfig } from './config/app.config';
 import { KafkaConfig } from './config/kafka.config';
 import { DatabaseConfig } from './config/database.config';
 import { LoggerService } from './common/logger/logger.service';
+import { CotizacionRepository } from './persistencia/repositorios/cotizacion.repository';
+import {
+    CotizacionRepositoryArchivo,
+    rutaSolicitudesArchivo,
+} from './persistencia/repositorios/cotizacion.repository-archivo';
 import { SocketEmitterService } from './modules/tiempo-real/socket-emitter.service';
 import { KafkaConsumerService } from './modules/ingesta/kafka-consumer.service';
 import { OccupancyAggregatorService } from './modules/procesamiento/occupancy-aggregator.service';
@@ -95,6 +100,25 @@ const registerShutdownHooks = (
  */
 const bootstrap = async (): Promise<void> => {
     const logger = container.resolve(LoggerService);
+
+    // Las cotizaciones son el único módulo que no toca la base: sus
+    // solicitudes viven en un JSON local y el resto del sistema sigue
+    // leyendo y escribiendo en MySQL como siempre. Se decide aquí, antes de
+    // que el contenedor resuelva el repositorio por primera vez (los routers
+    // se arman dentro de createApp).
+    //
+    // Fábrica y no registerSingleton: el repositorio del archivo recibe su
+    // ruta por constructor (con valor por defecto) y el inyector intentaría
+    // resolverla como si fuera una dependencia. Como el servicio de
+    // cotización es singleton, hay una sola instancia igual. El cast es solo
+    // de compilación: la clase de TypeORM lleva campos privados y TypeScript
+    // vuelve nominal a una clase así; las dos cumplen el mismo contrato.
+    container.register(CotizacionRepository, {
+        useFactory: (): CotizacionRepository =>
+            new CotizacionRepositoryArchivo() as unknown as CotizacionRepository,
+    });
+    logger.info(`Cotizaciones en archivo local: ${rutaSolicitudesArchivo()}`);
+
     const cfg = container.resolve(AppConfig);
     const db = container.resolve(DatabaseConfig);
     const emitter = container.resolve(SocketEmitterService);

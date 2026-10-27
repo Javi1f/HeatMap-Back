@@ -12,6 +12,7 @@ import { DispositivoInfraestructura } from '../persistencia/entidades/Dispositiv
 import { OcupacionAgregada } from '../persistencia/entidades/OcupacionAgregada.entity';
 import { Alerta } from '../persistencia/entidades/Alerta.entity';
 import { Reporte } from '../persistencia/entidades/Reporte.entity';
+import { SolicitudCotizacion } from '../persistencia/entidades/SolicitudCotizacion.entity';
 import { EnvService } from '../common/env/env.service';
 
 /**
@@ -69,6 +70,7 @@ export class DatabaseConfig {
                 OcupacionAgregada,
                 Alerta,
                 Reporte,
+                SolicitudCotizacion,
                 EventoAuditoria,
             ],
             migrations: [],

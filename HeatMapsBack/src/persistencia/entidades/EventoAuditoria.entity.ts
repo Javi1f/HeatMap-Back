@@ -14,6 +14,8 @@ export type TipoEventoAuditoria =
     | 'admin_activado'
     | 'admin_desactivado'
     | 'reporte_eliminado'
+    | 'cotizacion_actualizada'
+    | 'cotizacion_eliminada'
     | 'consumidor_iniciado'
     | 'consumidor_detenido';
 
